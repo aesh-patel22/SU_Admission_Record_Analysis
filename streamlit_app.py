@@ -490,7 +490,12 @@ def compute_kpis(df: pd.DataFrame):
     if df.empty:
         return 0, 0, 0
     total = len(df)
-    submitted = int(df['Status'].str.contains('Submitted|Submit', na=False, case=False).sum()) if 'Status' in df.columns else 0
+    if 'Status' in df.columns:
+        s = df['Status'].astype(str)
+        is_sub = s.str.contains('Submitted|Submit', na=False, case=False) & ~s.str.contains('Not Submitted|NotSubmitted', na=False, case=False)
+        submitted = int(is_sub.sum())
+    else:
+        submitted = 0
     confirmed = _get_confirmed_count(df)
     return total, submitted, confirmed
 
