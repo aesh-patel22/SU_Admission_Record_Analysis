@@ -835,6 +835,10 @@ with st.sidebar:
             box-shadow: none !important;
             outline: none !important;
         }}
+        [data-testid="stSidebar"] .stButton:last-of-type > button {{
+            background: rgba(148,163,184,0.08) !important;
+            border-color: rgba(148,163,184,0.12) !important;
+        }}
         [data-testid="stSidebar"] .stButton:nth-of-type({active_idx + 1}) > button {{
             background: rgba(96,165,250,0.15) !important;
             color: #60a5fa !important;
