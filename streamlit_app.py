@@ -218,43 +218,19 @@ st.markdown("""
     [class*="collapsedControl"] { display: none !important; }
     .material-symbols-rounded  { display: none !important; font-size: 0 !important; }
     span[data-testid="stIconMaterial"] { display: none !important; }
-    /* ── Flyout Submenu for Year Wise Breakdown ── */
-    .year-flyout-container {
+    /* ── Flyout Submenu for Year Wise Breakdown ──
+       The nav button itself is the only visible box (styled identically to
+       every other nav item). This wrapper just anchors the hidden submenu
+       and reveals it on hover, with no extra visible box or arrow. */
+    .year-menu-wrapper {
         position: relative;
-        width: 100%;
-        margin-bottom: 4px;
-    }
-    .year-flyout-trigger {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 14px;
-        border-radius: 12px;
-        color: #94a3b8;
-        font-size: 0.92rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        border: 1px solid transparent;
-        background: transparent;
-        width: 100%;
-        text-align: left;
-    }
-    .year-flyout-container:hover .year-flyout-trigger {
-        background: rgba(96,165,250,0.10) !important;
-        color: #e2e8f0 !important;
-        border-color: rgba(96,165,250,0.15) !important;
-    }
-    .year-flyout-active .year-flyout-trigger {
-        background: rgba(96,165,250,0.15) !important;
-        color: #60a5fa !important;
-        border-color: rgba(96,165,250,0.3) !important;
-        font-weight: 600 !important;
+        height: 0;
+        overflow: visible;
     }
     .year-menu-l1 {
         display: none;
         position: absolute;
-        top: 0;
+        top: -46px;
         left: calc(100% + 4px);
         width: 190px;
         background: #09152b;
@@ -264,7 +240,8 @@ st.markdown("""
         box-shadow: 0 12px 32px rgba(0,0,0,0.6);
         z-index: 99999;
     }
-    .year-flyout-container:hover .year-menu-l1 {
+    [data-testid="stSidebar"] .stButton:last-of-type:hover + .element-container .year-menu-l1,
+    .year-menu-l1:hover {
         display: block;
     }
     .year-item-l1 {
@@ -770,13 +747,12 @@ with st.sidebar:
     for item in NAV_ITEMS:
         is_active = st.session_state["page"] == item
         if item == "📅 Year Wise Breakdown":
-            active_cls = "year-flyout-active" if is_active else ""
-            flyout_html = f"""
-            <div class="year-flyout-container {active_cls}">
-                <div class="year-flyout-trigger">
-                    <span>📅 Year Wise Breakdown</span>
-                    <span style="font-size:0.7rem;opacity:0.7;">▶</span>
-                </div>
+            if st.button("📅 Year Wise Breakdown", key="nav_year_breakdown_btn", use_container_width=True):
+                st.session_state["page"] = item
+                st.rerun()
+
+            menu_html = """
+            <div class="year-menu-wrapper">
                 <div class="year-menu-l1">
                     <div class="year-item-l1">
                         <span>📅 2023-2024</span>
@@ -821,10 +797,7 @@ with st.sidebar:
                 </div>
             </div>
             """
-            st.markdown(flyout_html, unsafe_allow_html=True)
-            if st.button("📅 Year Wise Breakdown", key="nav_year_breakdown_btn", use_container_width=True):
-                st.session_state["page"] = item
-                st.rerun()
+            st.markdown(menu_html, unsafe_allow_html=True)
         else:
             if st.button(
                 item,
