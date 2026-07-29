@@ -831,6 +831,13 @@ with st.sidebar:
             color: #e2e8f0 !important;
             border-color: rgba(96,165,250,0.15) !important;
         }}
+         [data-testid="stSidebar"] {{
+        background: linear-gradient(180deg, #060e24 0%, #0a1628 100%) !important;
+        backdrop-filter: blur(24px) saturate(180%);
+        border-right: 1px solid rgba(96,165,250,0.18) !important;
+        min-width: 240px !important;
+        width: 240px !important;
+    }}
         [data-testid="stSidebar"] .stButton:last-of-type > button {{
             background: rgba(148,163,184,0.08) !important;
             border-color: rgba(148,163,184,0.12) !important;
