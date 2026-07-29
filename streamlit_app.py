@@ -831,6 +831,10 @@ with st.sidebar:
             color: #e2e8f0 !important;
             border-color: rgba(96,165,250,0.15) !important;
         }}
+        [data-testid="stSidebar"] .stButton:last-of-type > button {{
+            background: rgba(148,163,184,0.08) !important;
+            border-color: rgba(148,163,184,0.12) !important;
+        }}
         [data-testid="stSidebar"] .stButton > button:focus {{
             box-shadow: none !important;
             outline: none !important;
