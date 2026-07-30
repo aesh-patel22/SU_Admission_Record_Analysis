@@ -492,6 +492,57 @@ def _get_confirmed_count(df: pd.DataFrame) -> int:
     return 0
 
 
+@st.cache_data(show_spinner=False)
+def compute_lead_time_data(df: pd.DataFrame):
+    if df.empty:
+        return pd.DataFrame(), {
+            'sv_mean': 0.0, 'sv_median': 0.0, 'sv_count': 0,
+            'vc_mean': 0.0, 'vc_median': 0.0, 'vc_count': 0,
+            'sc_mean': 0.0, 'sc_median': 0.0, 'sc_count': 0,
+        }
+
+    df_lt = df.copy()
+    s_col = find_column(df_lt, 'submit date') or 'Submit Date'
+    v_col = find_column(df_lt, 'verification date') or 'Verification Date'
+    c_col = find_column(df_lt, 'confirmation date') or 'Confirmation Date'
+
+    if s_col in df_lt.columns:
+        df_lt['_s_dt'] = pd.to_datetime(df_lt[s_col], errors='coerce', format='mixed')
+    else:
+        df_lt['_s_dt'] = pd.NaT
+
+    if v_col in df_lt.columns:
+        df_lt['_v_dt'] = pd.to_datetime(df_lt[v_col], errors='coerce', format='mixed')
+    else:
+        df_lt['_v_dt'] = pd.NaT
+
+    if c_col in df_lt.columns:
+        df_lt['_c_dt'] = pd.to_datetime(df_lt[c_col], errors='coerce', format='mixed')
+    else:
+        df_lt['_c_dt'] = pd.NaT
+
+    df_lt['Days_Sub_to_Ver'] = (df_lt['_v_dt'] - df_lt['_s_dt']).dt.total_seconds() / (24 * 3600)
+    df_lt['Days_Ver_to_Conf'] = (df_lt['_c_dt'] - df_lt['_v_dt']).dt.total_seconds() / (24 * 3600)
+    df_lt['Days_Sub_to_Conf'] = (df_lt['_c_dt'] - df_lt['_s_dt']).dt.total_seconds() / (24 * 3600)
+
+    sv_valid = df_lt[df_lt['Days_Sub_to_Ver'] >= 0]['Days_Sub_to_Ver']
+    vc_valid = df_lt[df_lt['Days_Ver_to_Conf'] >= 0]['Days_Ver_to_Conf']
+    sc_valid = df_lt[df_lt['Days_Sub_to_Conf'] >= 0]['Days_Sub_to_Conf']
+
+    stats = {
+        'sv_mean': float(sv_valid.mean()) if len(sv_valid) > 0 else 0.0,
+        'sv_median': float(sv_valid.median()) if len(sv_valid) > 0 else 0.0,
+        'sv_count': int(len(sv_valid)),
+        'vc_mean': float(vc_valid.mean()) if len(vc_valid) > 0 else 0.0,
+        'vc_median': float(vc_valid.median()) if len(vc_valid) > 0 else 0.0,
+        'vc_count': int(len(vc_valid)),
+        'sc_mean': float(sc_valid.mean()) if len(sc_valid) > 0 else 0.0,
+        'sc_median': float(sc_valid.median()) if len(sc_valid) > 0 else 0.0,
+        'sc_count': int(len(sc_valid)),
+    }
+    return df_lt, stats
+
+
 # ── Cached chart-data helpers (avoid recomputing on every rerun) ──
 
 @st.cache_data(show_spinner=False)
@@ -719,6 +770,7 @@ with st.sidebar:
     NAV_ITEMS = [
         "🏠 Home Overview",
         "📈 Inquiry Funnel",
+        "⏱️ Admission Lead Time",
         "🏆 Program Popularity",
         "🗺️ Geographic Analysis",
         "👥 Gender Analysis",
@@ -924,6 +976,128 @@ elif page == "📈 Inquiry Funnel":
         ]:
             with col:
                 st.markdown(f'<div class="glass-card {cls}"><div class="card-label">{label}</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
+
+elif page == "⏱️ Admission Lead Time":
+    st.markdown('<span class="section-label">Process Efficiency</span>', unsafe_allow_html=True)
+    st.title("Admission Lead Time")
+    st.markdown('<h2>Time from the beginning of a process until its completion</h2>', unsafe_allow_html=True)
+    st.caption("ℹ️ Note: Inquiry Date is not available in the dataset. Turnaround time calculations begin from application Submission Date.")
+    st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
+
+    if not df.empty:
+        df_lt, stats = compute_lead_time_data(df)
+
+        # ── KPI Cards for the 3 Time Intervals ──
+        c1, c2, c3, c4 = st.columns(4)
+
+        sv_val = f"{stats['sv_mean']:.1f} Days" if stats['sv_mean'] >= 1 else f"{stats['sv_mean']*24:.1f} Hours"
+        vc_val = f"{stats['vc_mean']:.1f} Days"
+        sc_val = f"{stats['sc_mean']:.1f} Days"
+
+        cards = [
+            (c1, "card-blue",   "Office Response Time",     sv_val,                      "Submission → Verification"),
+            (c2, "card-green",  "Student Decision Time",    vc_val,                      "Verification → Confirmation"),
+            (c3, "card-amber",  "Total Decision Time",      sc_val,                      "Submission → Confirmation"),
+            (c4, "card-violet", "Full-Cycle Applications", f"{stats['sc_count']:,}",      "Verified & Confirmed"),
+        ]
+        for col, cls, label, value, sub in cards:
+            with col:
+                st.markdown(f"""
+                <div class="glass-card {cls}">
+                    <div class="card-label">{label}</div>
+                    <div class="card-value">{value}</div>
+                    <div class="card-sub">{sub}</div>
+                </div>""", unsafe_allow_html=True)
+
+        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
+
+        # ── Visual Breakdown of intervals ──
+        c_left, c_right = st.columns([1, 1])
+
+        with c_left:
+            st.markdown("#### ⏱️ Turnaround Time by Stage (Mean vs Median)")
+            stage_df = pd.DataFrame({
+                'Stage Interval': [
+                    'Submission → Verification\n(Office Response)',
+                    'Verification → Confirmation\n(Student Decision)',
+                    'Submission → Confirmation\n(Total Decision Time)'
+                ],
+                'Average Days': [stats['sv_mean'], stats['vc_mean'], stats['sc_mean']],
+                'Median Days': [stats['sv_median'], stats['vc_median'], stats['sc_median']]
+            })
+            fig_stage = px.bar(
+                stage_df,
+                x='Stage Interval',
+                y=['Average Days', 'Median Days'],
+                barmode='group',
+                text_auto='.1f',
+                title="Lead Time Comparison Across Admission Stages (Days)",
+                color_discrete_sequence=['#60a5fa', '#34d399']
+            )
+            fig_stage.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
+            wrap_chart(fig_stage, height=450)
+
+        with c_right:
+            st.markdown("#### 📊 Student Decision Time Distribution")
+            vc_data = df_lt[df_lt['Days_Ver_to_Conf'] >= 0]['Days_Ver_to_Conf']
+            if not vc_data.empty:
+                bins = [-0.01, 1, 3, 7, 14, 30, 999]
+                labels = ['Same / 1 Day', '2 - 3 Days', '4 - 7 Days', '8 - 14 Days', '15 - 30 Days', '30+ Days']
+                vc_cats = pd.cut(vc_data, bins=bins, labels=labels).value_counts().reindex(labels).fillna(0).reset_index()
+                vc_cats.columns = ['Time Bracket', 'Student Count']
+                fig_dist = px.bar(
+                    vc_cats,
+                    x='Time Bracket',
+                    y='Student Count',
+                    text_auto=True,
+                    title="Time Taken by Students to Decide After Verification",
+                    color='Student Count',
+                    color_continuous_scale='Purples'
+                )
+                fig_dist.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
+                wrap_chart(fig_dist, height=450)
+
+        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
+
+        # ── Program-wise Lead Time Analysis ──
+        st.markdown("#### 🏆 Program-wise Admission Lead Time (Top Programs)")
+        if 'Program1' in df_lt.columns:
+            top_programs = df_lt['Program1'].value_counts().head(10).index
+            prog_lt = (
+                df_lt[df_lt['Program1'].isin(top_programs)]
+                .groupby('Program1', observed=True)
+                .agg(
+                    Office_Response=('Days_Sub_to_Ver', lambda x: x[x>=0].mean()),
+                    Student_Decision=('Days_Ver_to_Conf', lambda x: x[x>=0].mean()),
+                    Total_Lead_Time=('Days_Sub_to_Conf', lambda x: x[x>=0].mean())
+                )
+                .reset_index()
+            )
+            prog_lt = prog_lt.sort_values('Total_Lead_Time', ascending=True)
+
+            fig_prog = px.bar(
+                prog_lt,
+                y='Program1',
+                x=['Office_Response', 'Student_Decision'],
+                orientation='h',
+                title="Average Admission Lead Time Breakdown by Program (Days)",
+                labels={'value': 'Average Days', 'Program1': 'Program', 'variable': 'Stage'},
+                color_discrete_map={'Office_Response': '#60a5fa', 'Student_Decision': '#fbbf24'}
+            )
+            fig_prog.update_traces(marker_line_width=0)
+            wrap_chart(fig_prog, height=480)
+
+        # ── Explanation Box ──
+        st.markdown("""
+        <div style="padding:16px 20px; background:rgba(96,165,250,0.06); border:1px solid rgba(96,165,250,0.2); border-radius:14px; margin-top:20px;">
+            <div style="font-weight:700; color:#60a5fa; margin-bottom:8px;">💡 Lead Time Key Insights:</div>
+            <ul style="color:#cbd5e1; font-size:0.9rem; margin-bottom:0; padding-left:20px;">
+                <li><b>Submission → Verification (Office Response Time):</b> Verification Date − Submission Date. Response time of the admission office.</li>
+                <li><b>Verification → Confirmation (Student Decision Time):</b> Confirmation Date − Verification Date. Time taken by the student to decide after verification.</li>
+                <li><b>Submission → Confirmation (Total Decision Time):</b> Confirmation Date − Submission Date. Total admission decision time.</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
 elif page == "🏆 Program Popularity":
     st.markdown('<span class="section-label">Programs</span>', unsafe_allow_html=True)
@@ -1134,6 +1308,47 @@ elif page == "🔮 Advanced Analytics":
                 fig1.update_traces(line_width=3, marker_size=8, marker_color='#a78bfa')
                 wrap_chart(fig1)
 
+        with c2:
+            st.markdown("**🎯 Program Recommendation (ML Model)**")
+            marks = st.slider("Your 12th Grade Percentage", 40, 100, 75)
+
+            train_data = get_program_training_data(df)
+            if not train_data.empty:
+                st.caption(f"Model trained on {len(train_data):,} confirmed admissions (2023–2026), matched by 12th % → actual program.")
+                results = predict_program(train_data, marks)
+                medals = ["🥇", "🥈", "🥉"]
+                if results:
+                    for rank, (program, score) in enumerate(results):
+                        st.markdown(f"**{medals[rank]} {program}** — {score * 100:.0f}% likelihood")
+                else:
+                    st.info("No close historical match at this percentage yet.")
+            else:
+                st.info("Not enough confirmed-admission records with 12th % on file to train a model yet.")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("**🤖 Ask Claude (LLM)**")
+            if get_anthropic_client() is None:
+                st.caption(
+                    "Not configured. Add `ANTHROPIC_API_KEY` under Settings → Secrets "
+                    "on Streamlit Cloud to enable this."
+                )
+            elif not train_data.empty:
+                st.caption("Claude reasons over the same nearby historical students as the model above, and explains why.")
+                if st.button("Get Claude's recommendation"):
+                    k = min(25, len(train_data))
+                    dist = (train_data[MARKS_COL] - marks).abs().to_numpy()
+                    nearest_idx = np.argsort(dist)[:k]
+                    neighbor_counts = tuple(
+                        train_data.iloc[nearest_idx]['Program1'].value_counts().items()
+                    )
+                    with st.spinner("Asking Claude..."):
+                        answer = llm_recommend_program(marks, neighbor_counts)
+                    if answer:
+                        st.markdown(answer)
+                    else:
+                        st.info("Couldn't reach the LLM — check your API key.")
+
+        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
         total, _, confirmed = compute_kpis(df)
         occ_rate = round(confirmed / max(total, 1) * 100, 1)
@@ -1142,6 +1357,7 @@ elif page == "🔮 Advanced Analytics":
         with c4: st.metric("Total Records", f"{total:,}")
         with c5: st.metric("Confirmed Admissions", f"{confirmed:,}")
 
+        st.info("**Roadmap** · ML-based admission forecasting · AI chatbot for student queries · Personalised program recommendation engine")
 
 elif page == "📅 Year Wise Breakdown":
     st.markdown('<span class="section-label">Yearly Deep Dive</span>', unsafe_allow_html=True)
