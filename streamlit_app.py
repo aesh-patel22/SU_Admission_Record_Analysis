@@ -831,17 +831,6 @@ with st.sidebar:
             color: #e2e8f0 !important;
             border-color: rgba(96,165,250,0.15) !important;
         }}
-         [data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #060e24 0%, #0a1628 100%) !important;
-        backdrop-filter: blur(24px) saturate(180%);
-        border-right: 1px solid rgba(96,165,250,0.18) !important;
-        min-width: 240px !important;
-        width: 240px !important;
-    }}
-        [data-testid="stSidebar"] .stButton:last-of-type > button {{
-            background: rgba(148,163,184,0.08) !important;
-            border-color: rgba(148,163,184,0.12) !important;
-        }}
         [data-testid="stSidebar"] .stButton > button:focus {{
             box-shadow: none !important;
             outline: none !important;
@@ -1145,47 +1134,6 @@ elif page == "🔮 Advanced Analytics":
                 fig1.update_traces(line_width=3, marker_size=8, marker_color='#a78bfa')
                 wrap_chart(fig1)
 
-        with c2:
-            st.markdown("**🎯 Program Recommendation (ML Model)**")
-            marks = st.slider("Your 12th Grade Percentage", 40, 100, 75)
-
-            train_data = get_program_training_data(df)
-            if not train_data.empty:
-                st.caption(f"Model trained on {len(train_data):,} confirmed admissions (2023–2026), matched by 12th % → actual program.")
-                results = predict_program(train_data, marks)
-                medals = ["🥇", "🥈", "🥉"]
-                if results:
-                    for rank, (program, score) in enumerate(results):
-                        st.markdown(f"**{medals[rank]} {program}** — {score * 100:.0f}% likelihood")
-                else:
-                    st.info("No close historical match at this percentage yet.")
-            else:
-                st.info("Not enough confirmed-admission records with 12th % on file to train a model yet.")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("**🤖 Ask Claude (LLM)**")
-            if get_anthropic_client() is None:
-                st.caption(
-                    "Not configured. Add `ANTHROPIC_API_KEY` under Settings → Secrets "
-                    "on Streamlit Cloud to enable this."
-                )
-            elif not train_data.empty:
-                st.caption("Claude reasons over the same nearby historical students as the model above, and explains why.")
-                if st.button("Get Claude's recommendation"):
-                    k = min(25, len(train_data))
-                    dist = (train_data[MARKS_COL] - marks).abs().to_numpy()
-                    nearest_idx = np.argsort(dist)[:k]
-                    neighbor_counts = tuple(
-                        train_data.iloc[nearest_idx]['Program1'].value_counts().items()
-                    )
-                    with st.spinner("Asking Claude..."):
-                        answer = llm_recommend_program(marks, neighbor_counts)
-                    if answer:
-                        st.markdown(answer)
-                    else:
-                        st.info("Couldn't reach the LLM — check your API key.")
-
-        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
         total, _, confirmed = compute_kpis(df)
         occ_rate = round(confirmed / max(total, 1) * 100, 1)
@@ -1194,7 +1142,6 @@ elif page == "🔮 Advanced Analytics":
         with c4: st.metric("Total Records", f"{total:,}")
         with c5: st.metric("Confirmed Admissions", f"{confirmed:,}")
 
-        st.info("**Roadmap** · ML-based admission forecasting · AI chatbot for student queries · Personalised program recommendation engine")
 
 elif page == "📅 Year Wise Breakdown":
     st.markdown('<span class="section-label">Yearly Deep Dive</span>', unsafe_allow_html=True)
