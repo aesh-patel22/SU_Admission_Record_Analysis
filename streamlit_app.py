@@ -979,125 +979,99 @@ elif page == "📈 Inquiry Funnel":
 
 elif page == "⏱️ Admission Lead Time":
     st.markdown('<span class="section-label">Process Efficiency</span>', unsafe_allow_html=True)
-    st.title("Admission Lead Time")
-    st.markdown('<h2>Time from the beginning of a process until its completion</h2>', unsafe_allow_html=True)
+    st.title("Admission Lead Time Calculations")
+    st.markdown('<h2>Time from the beginning of a process until its completion across all 4 Academic Years</h2>', unsafe_allow_html=True)
     st.caption("ℹ️ Note: Inquiry Date is not available in the dataset. Turnaround time calculations begin from application Submission Date.")
     st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
     if not df.empty:
         df_lt, stats = compute_lead_time_data(df)
 
-        # ── KPI Cards for the 3 Time Intervals ──
-        c1, c2, c3, c4 = st.columns(4)
+        st.markdown("### 🧮 1. Overall Admission Lead Time Calculations (All Years Combined)")
+        st.markdown(f"**Total Records Analyzed across 2023–2027:** {len(df):,} records")
 
-        sv_val = f"{stats['sv_mean']:.1f} Days" if stats['sv_mean'] >= 1 else f"{stats['sv_mean']*24:.1f} Hours"
-        vc_val = f"{stats['vc_mean']:.1f} Days"
-        sc_val = f"{stats['sc_mean']:.1f} Days"
+        col1, col2, col3 = st.columns(3)
 
-        cards = [
-            (c1, "card-blue",   "Office Response Time",     sv_val,                      "Submission → Verification"),
-            (c2, "card-green",  "Student Decision Time",    vc_val,                      "Verification → Confirmation"),
-            (c3, "card-amber",  "Total Decision Time",      sc_val,                      "Submission → Confirmation"),
-            (c4, "card-violet", "Full-Cycle Applications", f"{stats['sc_count']:,}",      "Verified & Confirmed"),
+        with col1:
+            st.markdown(f"""
+            <div class="glass-card card-blue" style="text-align:left; padding:22px;">
+                <div class="card-label">1. Submission → Verification</div>
+                <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">Response time of the admission office</div>
+                <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
+                    <b>Formula:</b> Verification Date − Submission Date<br><br>
+                    • <b>Average (Mean):</b> {stats['sv_mean']:.2f} Days ({stats['sv_mean']*24:.1f} Hours)<br>
+                    • <b>Median:</b> {stats['sv_median']:.2f} Days ({stats['sv_median']*24:.1f} Hours)<br>
+                    • <b>Tracked Records:</b> {stats['sv_count']:,}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown(f"""
+            <div class="glass-card card-green" style="text-align:left; padding:22px;">
+                <div class="card-label">2. Verification → Confirmation</div>
+                <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">Time taken by the student to decide after verification</div>
+                <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
+                    <b>Formula:</b> Confirmation Date − Verification Date<br><br>
+                    • <b>Average (Mean):</b> {stats['vc_mean']:.2f} Days<br>
+                    • <b>Median:</b> {stats['vc_median']:.2f} Days<br>
+                    • <b>Tracked Records:</b> {stats['vc_count']:,}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col3:
+            st.markdown(f"""
+            <div class="glass-card card-amber" style="text-align:left; padding:22px;">
+                <div class="card-label">3. Submission → Confirmation</div>
+                <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">Total Admission Decision Time</div>
+                <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
+                    <b>Formula:</b> Confirmation Date − Submission Date<br><br>
+                    • <b>Average (Mean):</b> {stats['sc_mean']:.2f} Days<br>
+                    • <b>Median:</b> {stats['sc_median']:.2f} Days<br>
+                    • <b>Tracked Records:</b> {stats['sc_count']:,}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
+
+        st.markdown("### 📅 2. Academic Year-by-Year Text Calculations")
+        st.markdown("This calculation covers **all 4 academic years** present in the dataset:")
+
+        years_info = [
+            ("2023", "2023-2024"),
+            ("2024", "2024-2025"),
+            ("2025", "2025-2026"),
+            ("2026", "2026-2027"),
         ]
-        for col, cls, label, value, sub in cards:
-            with col:
+
+        for y_code, y_name in years_info:
+            y_df = df_lt[df_lt['Year'] == y_code] if 'Year' in df_lt.columns else pd.DataFrame()
+            if not y_df.empty:
+                sv_v = y_df[y_df['Days_Sub_to_Ver'] >= 0]['Days_Sub_to_Ver']
+                vc_v = y_df[y_df['Days_Ver_to_Conf'] >= 0]['Days_Ver_to_Conf']
+                sc_v = y_df[y_df['Days_Sub_to_Conf'] >= 0]['Days_Sub_to_Conf']
+
+                sv_mean = sv_v.mean() if len(sv_v) > 0 else 0.0
+                sv_med = sv_v.median() if len(sv_v) > 0 else 0.0
+                vc_mean = vc_v.mean() if len(vc_v) > 0 else 0.0
+                vc_med = vc_v.median() if len(vc_v) > 0 else 0.0
+                sc_mean = sc_v.mean() if len(sc_v) > 0 else 0.0
+                sc_med = sc_v.median() if len(sc_v) > 0 else 0.0
+
                 st.markdown(f"""
-                <div class="glass-card {cls}">
-                    <div class="card-label">{label}</div>
-                    <div class="card-value">{value}</div>
-                    <div class="card-sub">{sub}</div>
-                </div>""", unsafe_allow_html=True)
-
-        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
-
-        # ── Visual Breakdown of intervals ──
-        c_left, c_right = st.columns([1, 1])
-
-        with c_left:
-            st.markdown("#### ⏱️ Turnaround Time by Stage (Mean vs Median)")
-            stage_df = pd.DataFrame({
-                'Stage Interval': [
-                    'Submission → Verification\n(Office Response)',
-                    'Verification → Confirmation\n(Student Decision)',
-                    'Submission → Confirmation\n(Total Decision Time)'
-                ],
-                'Average Days': [stats['sv_mean'], stats['vc_mean'], stats['sc_mean']],
-                'Median Days': [stats['sv_median'], stats['vc_median'], stats['sc_median']]
-            })
-            fig_stage = px.bar(
-                stage_df,
-                x='Stage Interval',
-                y=['Average Days', 'Median Days'],
-                barmode='group',
-                text_auto='.1f',
-                title="Lead Time Comparison Across Admission Stages (Days)",
-                color_discrete_sequence=['#60a5fa', '#34d399']
-            )
-            fig_stage.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
-            wrap_chart(fig_stage, height=450)
-
-        with c_right:
-            st.markdown("#### 📊 Student Decision Time Distribution")
-            vc_data = df_lt[df_lt['Days_Ver_to_Conf'] >= 0]['Days_Ver_to_Conf']
-            if not vc_data.empty:
-                bins = [-0.01, 1, 3, 7, 14, 30, 999]
-                labels = ['Same / 1 Day', '2 - 3 Days', '4 - 7 Days', '8 - 14 Days', '15 - 30 Days', '30+ Days']
-                vc_cats = pd.cut(vc_data, bins=bins, labels=labels).value_counts().reindex(labels).fillna(0).reset_index()
-                vc_cats.columns = ['Time Bracket', 'Student Count']
-                fig_dist = px.bar(
-                    vc_cats,
-                    x='Time Bracket',
-                    y='Student Count',
-                    text_auto=True,
-                    title="Time Taken by Students to Decide After Verification",
-                    color='Student Count',
-                    color_continuous_scale='Purples'
-                )
-                fig_dist.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
-                wrap_chart(fig_dist, height=450)
-
-        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
-
-        # ── Program-wise Lead Time Analysis ──
-        st.markdown("#### 🏆 Program-wise Admission Lead Time (Top Programs)")
-        if 'Program1' in df_lt.columns:
-            top_programs = df_lt['Program1'].value_counts().head(10).index
-            prog_lt = (
-                df_lt[df_lt['Program1'].isin(top_programs)]
-                .groupby('Program1', observed=True)
-                .agg(
-                    Office_Response=('Days_Sub_to_Ver', lambda x: x[x>=0].mean()),
-                    Student_Decision=('Days_Ver_to_Conf', lambda x: x[x>=0].mean()),
-                    Total_Lead_Time=('Days_Sub_to_Conf', lambda x: x[x>=0].mean())
-                )
-                .reset_index()
-            )
-            prog_lt = prog_lt.sort_values('Total_Lead_Time', ascending=True)
-
-            fig_prog = px.bar(
-                prog_lt,
-                y='Program1',
-                x=['Office_Response', 'Student_Decision'],
-                orientation='h',
-                title="Average Admission Lead Time Breakdown by Program (Days)",
-                labels={'value': 'Average Days', 'Program1': 'Program', 'variable': 'Stage'},
-                color_discrete_map={'Office_Response': '#60a5fa', 'Student_Decision': '#fbbf24'}
-            )
-            fig_prog.update_traces(marker_line_width=0)
-            wrap_chart(fig_prog, height=480)
-
-        # ── Explanation Box ──
-        st.markdown("""
-        <div style="padding:16px 20px; background:rgba(96,165,250,0.06); border:1px solid rgba(96,165,250,0.2); border-radius:14px; margin-top:20px;">
-            <div style="font-weight:700; color:#60a5fa; margin-bottom:8px;">💡 Lead Time Key Insights:</div>
-            <ul style="color:#cbd5e1; font-size:0.9rem; margin-bottom:0; padding-left:20px;">
-                <li><b>Submission → Verification (Office Response Time):</b> Verification Date − Submission Date. Response time of the admission office.</li>
-                <li><b>Verification → Confirmation (Student Decision Time):</b> Confirmation Date − Verification Date. Time taken by the student to decide after verification.</li>
-                <li><b>Submission → Confirmation (Total Decision Time):</b> Confirmation Date − Submission Date. Total admission decision time.</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+                <div style="padding:16px 20px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:14px; margin-bottom:12px;">
+                    <div style="font-weight:700; color:#60a5fa; font-size:1.05rem; margin-bottom:8px;">
+                        🗓️ Academic Year {y_name} <span style="color:#64748b; font-weight:400; font-size:0.88rem;">({len(y_df):,} Total Records)</span>
+                    </div>
+                    <ul style="color:#cbd5e1; font-size:0.92rem; margin:0; padding-left:20px; line-height:1.7;">
+                        <li><b>Submission → Verification (Office Response Time):</b> Average = <b>{sv_mean:.2f} days</b> | Median = <b>{sv_med:.2f} days</b> (Records: {len(sv_v):,})</li>
+                        <li><b>Verification → Confirmation (Student Decision Time):</b> Average = <b>{vc_mean:.2f} days</b> | Median = <b>{vc_med:.2f} days</b> (Records: {len(vc_v):,})</li>
+                        <li><b>Submission → Confirmation (Total Admission Decision Time):</b> Average = <b>{sc_mean:.2f} days</b> | Median = <b>{sc_med:.2f} days</b> (Records: {len(sc_v):,})</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
 
 elif page == "🏆 Program Popularity":
     st.markdown('<span class="section-label">Programs</span>', unsafe_allow_html=True)
