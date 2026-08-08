@@ -1394,47 +1394,104 @@ elif page == "📅 Year Wise Breakdown":
         if selected_metric == "🏆 Program Popularity":
             st.markdown(f"### 🏆 Program Popularity — AY {selected_year}")
 
-            if selected_year == "2026-2027":
-                # For 2026–2027, count a student's selection across ALL
-                # Program1–Program10 preference columns, matching the
-                # program-popularity analysis performed on the 2026–27 dataset.
-                program_cols = [f"Program{i}" for i in range(1, 11) if f"Program{i}" in year_df.columns]
-                if program_cols:
-                    program_selections = pd.concat(
-                        [year_df[col].dropna().astype(str).str.strip() for col in program_cols],
-                        ignore_index=True
-                    )
-                    program_selections = program_selections[
-                        program_selections.ne('') & program_selections.ne('nan')
-                    ]
-                    top15_yr = program_selections.value_counts().head(15).reset_index()
-                    top15_yr.columns = ['Program', 'Count']
+           
+    if selected_year == "2026-2027":
+        # Count course selections across Program1 → Program10
+        program_cols = [
+            col for col in year_df.columns
+            if str(col).strip().lower() in
+            [f"program{i}" for i in range(1, 11)]
+        ]
 
-                    fig_p = px.bar(
-                        top15_yr, x='Count', y='Program', orientation='h',
-                        text_auto=True,
-                        title="Top 15 Programs by Demand — 2026–2027 (Program1–Program10)",
-                        color='Count', color_continuous_scale='Blues'
-                    )
-                    fig_p.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
-                    wrap_chart(fig_p, height=560, yaxis_extra={'categoryorder': 'total ascending'})
-                    st.caption(
-                        f"Based on {len(program_selections):,} selections across {len(program_cols)} program-preference columns "
-                        f"and {top15_yr.shape[0]} top programs. Total distinct programs: {program_selections.nunique():,}."
-                    )
-                else:
-                    st.info("Program preference columns are not available for 2026–2027.")
-            elif 'Program1' in year_df.columns:
-                # Keep the existing logic unchanged for the other academic years.
-                top15_yr = year_df['Program1'].value_counts().head(15).reset_index()
-                top15_yr.columns = ['Program', 'Count']
-                fig_p = px.bar(top15_yr, x='Count', y='Program', orientation='h',
-                               text_auto=True, title=f"Top Programs by Demand ({selected_year})",
-                               color='Count', color_continuous_scale='Blues')
-                fig_p.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
-                wrap_chart(fig_p, height=560, yaxis_extra={'categoryorder': 'total ascending'})
-            else:
-                st.info("Program data not available for this year.")
+        if program_cols:
+            # Combine all 10 program preference columns
+            program_selections = (
+                year_df[program_cols]
+                .apply(lambda col: col.astype(str).str.strip())
+                .stack()
+            )
+
+            # Remove blank / missing values
+            program_selections = program_selections[
+                program_selections.notna()
+                & (program_selections != "")
+                & (program_selections.str.lower() != "nan")
+            ]
+
+            # Count every course selection across Program 1–10
+            program_counts = (
+                program_selections
+                .value_counts()
+                .head(10)
+                .reset_index()
+            )
+
+            program_counts.columns = ["Program", "Count"]
+
+            fig_p = px.bar(
+                program_counts,
+                x="Count",
+                y="Program",
+                orientation="h",
+                text_auto=True,
+                title="Top 10 Programs by Demand (2026–2027)",
+                color="Count",
+                color_continuous_scale="Blues"
+            )
+
+            fig_p.update_traces(
+                marker_line_width=0,
+                textfont_color="#e2e8f0"
+            )
+
+            wrap_chart(
+                fig_p,
+                height=520,
+                yaxis_extra={"categoryorder": "total ascending"}
+            )
+
+            st.caption(
+                f"Based on {len(program_selections):,} total program selections "
+                f"across {len(program_cols)} program preference columns."
+            )
+
+        else:
+            st.info("Program 1–10 columns not available for 2026–2027.")
+
+    else:
+        # Existing logic for previous academic years
+        if "Program1" in year_df.columns:
+            top15_yr = (
+                year_df["Program1"]
+                .value_counts()
+                .head(15)
+                .reset_index()
+            )
+            top15_yr.columns = ["Program", "Count"]
+
+            fig_p = px.bar(
+                top15_yr,
+                x="Count",
+                y="Program",
+                orientation="h",
+                text_auto=True,
+                title=f"Top Programs by Demand ({selected_year})",
+                color="Count",
+                color_continuous_scale="Blues"
+            )
+
+            fig_p.update_traces(
+                marker_line_width=0,
+                textfont_color="#e2e8f0"
+            )
+
+            wrap_chart(
+                fig_p,
+                height=560,
+                yaxis_extra={"categoryorder": "total ascending"}
+            )
+        else:
+            st.info("Program data not available for this year.")
 
         elif selected_metric == "🏷️ Admissions Category":
             st.markdown(f"### 🏷️ Admissions Category — AY {selected_year}")
