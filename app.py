@@ -1159,7 +1159,7 @@ page = st.session_state.get("page", NAV_ITEMS[0])
 
 if page == "🏠 Home Overview":
     st.markdown('<span class="section-label">Dashboard</span>', unsafe_allow_html=True)
-    st.title("Admission Analytics")
+    st.title("Admission Analytics update")
     st.markdown('<h2>2023 – 2027 · Sarvajanik University</h2>', unsafe_allow_html=True)
     st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
