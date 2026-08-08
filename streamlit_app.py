@@ -228,103 +228,6 @@ st.markdown("""
     .material-symbols-rounded  { display: none !important; font-size: 0 !important; }
     span[data-testid="stIconMaterial"] { display: none !important; }
     /* Hide the entire top-bar area that holds the button */
-    /* ── Flyout Submenu for Year Wise Breakdown ── */
-    .year-flyout-container {
-        position: relative;
-        width: 100%;
-        margin-bottom: 4px;
-    }
-    .year-flyout-trigger {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 14px;
-        border-radius: 12px;
-        color: #94a3b8;
-        font-size: 0.92rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        border: 1px solid transparent;
-        background: transparent;
-        width: 100%;
-        text-align: left;
-    }
-    .year-flyout-container:hover .year-flyout-trigger {
-        background: rgba(96,165,250,0.10) !important;
-        color: #e2e8f0 !important;
-        border-color: rgba(96,165,250,0.15) !important;
-    }
-    .year-flyout-active .year-flyout-trigger {
-        background: rgba(96,165,250,0.15) !important;
-        color: #60a5fa !important;
-        border-color: rgba(96,165,250,0.3) !important;
-        font-weight: 600 !important;
-    }
-    .year-menu-l1 {
-        display: none;
-        position: absolute;
-        top: 0;
-        left: calc(100% + 4px);
-        width: 190px;
-        background: #09152b;
-        border: 1px solid rgba(96,165,250,0.3);
-        border-radius: 14px;
-        padding: 6px;
-        box-shadow: 0 12px 32px rgba(0,0,0,0.6);
-        z-index: 99999;
-    }
-    .year-flyout-container:hover .year-menu-l1 {
-        display: block;
-    }
-    .year-item-l1 {
-        position: relative;
-        padding: 8px 12px;
-        border-radius: 8px;
-        color: #cbd5e1;
-        font-size: 0.84rem;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        transition: all 0.15s ease;
-    }
-    .year-item-l1:hover {
-        background: rgba(96,165,250,0.2);
-        color: #60a5fa;
-    }
-    .year-menu-l2 {
-        display: none;
-        position: absolute;
-        top: -4px;
-        left: calc(100% + 4px);
-        width: 200px;
-        background: #0b1a36;
-        border: 1px solid rgba(96,165,250,0.3);
-        border-radius: 14px;
-        padding: 6px;
-        box-shadow: 0 12px 32px rgba(0,0,0,0.6);
-        z-index: 100000;
-    }
-    .year-item-l1:hover .year-menu-l2 {
-        display: block;
-    }
-    .metric-item-l2 {
-        padding: 8px 10px;
-        border-radius: 8px;
-        color: #94a3b8;
-        font-size: 0.8rem;
-        font-weight: 500;
-        cursor: pointer;
-        text-decoration: none !important;
-        display: block;
-        transition: all 0.15s ease;
-    }
-    .metric-item-l2:hover {
-        background: rgba(96,165,250,0.25);
-        color: #38bdf8 !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1038,71 +941,14 @@ with st.sidebar:
 
     for item in NAV_ITEMS:
         is_active = st.session_state["page"] == item
-        if item == "📅 Year Wise Breakdown":
-            active_cls = "year-flyout-active" if is_active else ""
-            flyout_html = f"""
-            <div class="year-flyout-container {active_cls}">
-                <div class="year-flyout-trigger">
-                    <span>📅 Year Wise Breakdown</span>
-                    <span style="font-size:0.7rem;opacity:0.7;">▶</span>
-                </div>
-                <div class="year-menu-l1">
-                    <div class="year-item-l1">
-                        <span>📅 2023-2024</span>
-                        <span style="font-size:0.65rem;">▶</span>
-                        <div class="year-menu-l2">
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2023-2024&metric=🏆+Program+Popularity" target="_self" class="metric-item-l2">🏆 Program Popularity</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2023-2024&metric=🏷️+Admissions+Category" target="_self" class="metric-item-l2">🏷️ Admissions Category</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2023-2024&metric=👥+Gender+Analysis" target="_self" class="metric-item-l2">👥 Gender Analysis</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2023-2024&metric=📚+Board+%26+Stream" target="_self" class="metric-item-l2">📚 Board & Stream</a>
-                        </div>
-                    </div>
-                    <div class="year-item-l1">
-                        <span>📅 2024-2025</span>
-                        <span style="font-size:0.65rem;">▶</span>
-                        <div class="year-menu-l2">
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2024-2025&metric=🏆+Program+Popularity" target="_self" class="metric-item-l2">🏆 Program Popularity</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2024-2025&metric=🏷️+Admissions+Category" target="_self" class="metric-item-l2">🏷️ Admissions Category</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2024-2025&metric=👥+Gender+Analysis" target="_self" class="metric-item-l2">👥 Gender Analysis</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2024-2025&metric=📚+Board+%26+Stream" target="_self" class="metric-item-l2">📚 Board & Stream</a>
-                        </div>
-                    </div>
-                    <div class="year-item-l1">
-                        <span>📅 2025-2026</span>
-                        <span style="font-size:0.65rem;">▶</span>
-                        <div class="year-menu-l2">
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2025-2026&metric=🏆+Program+Popularity" target="_self" class="metric-item-l2">🏆 Program Popularity</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2025-2026&metric=🏷️+Admissions+Category" target="_self" class="metric-item-l2">🏷️ Admissions Category</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2025-2026&metric=👥+Gender+Analysis" target="_self" class="metric-item-l2">👥 Gender Analysis</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2025-2026&metric=📚+Board+%26+Stream" target="_self" class="metric-item-l2">📚 Board & Stream</a>
-                        </div>
-                    </div>
-                    <div class="year-item-l1">
-                        <span>📅 2026-2027</span>
-                        <span style="font-size:0.65rem;">▶</span>
-                        <div class="year-menu-l2">
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2026-2027&metric=🏆+Program+Popularity" target="_self" class="metric-item-l2">🏆 Program Popularity</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2026-2027&metric=🏷️+Admissions+Category" target="_self" class="metric-item-l2">🏷️ Admissions Category</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2026-2027&metric=👥+Gender+Analysis" target="_self" class="metric-item-l2">👥 Gender Analysis</a>
-                            <a href="?page=📅+Year+Wise+Breakdown&year=2026-2027&metric=📚+Board+%26+Stream" target="_self" class="metric-item-l2">📚 Board & Stream</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            """
-            st.markdown(flyout_html, unsafe_allow_html=True)
-            if st.button("📅 Year Wise Breakdown", key="nav_year_breakdown_btn", use_container_width=True):
-                st.session_state["page"] = item
-                st.rerun()
-        else:
-            if st.button(
-                item,
-                key=f"nav_{item}",
-                use_container_width=True,
-                help=item,
-            ):
-                st.session_state["page"] = item
-                st.rerun()
+        if st.button(
+            item,
+            key=f"nav_{item}",
+            use_container_width=True,
+            help=item,
+        ):
+            st.session_state["page"] = item
+            st.rerun()
 
     # Build active-item highlight CSS (targets the nth button in sidebar)
     active_idx = NAV_ITEMS.index(st.session_state["page"]) if st.session_state["page"] in NAV_ITEMS else 0
@@ -1159,7 +1005,7 @@ page = st.session_state.get("page", NAV_ITEMS[0])
 
 if page == "🏠 Home Overview":
     st.markdown('<span class="section-label">Dashboard</span>', unsafe_allow_html=True)
-    st.title("Admission Analytics update")
+    st.title("Admission Analytics")
     st.markdown('<h2>2023 – 2027 · Sarvajanik University</h2>', unsafe_allow_html=True)
     st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
@@ -1372,7 +1218,9 @@ elif page == "👥 Gender Analysis":
             gender_dist = df['Gender'].value_counts()
             fig1 = px.pie(names=gender_dist.index, values=gender_dist.values,
                           title="Gender Distribution", hole=0.5,
-                          color_discrete_sequence=['#60a5fa', '#f472b6', '#a78bfa'])
+                          color=gender_dist.index,
+                          color_discrete_map={'Female': '#f472b6', 'Male': '#60a5fa'},
+                          color_discrete_sequence=['#a78bfa'])
             fig1.update_traces(textfont_color='#e2e8f0', marker_line_color='rgba(0,0,0,0)')
             wrap_chart(fig1, height=380)
         with c2:
@@ -1382,7 +1230,8 @@ elif page == "👥 Gender Analysis":
                   .size().reset_index(name='Count'))
             fig2 = px.bar(gp, x='Program1', y='Count', color='Gender',
                           title="Program Preference by Gender", barmode='group',
-                          color_discrete_sequence=['#60a5fa', '#f472b6', '#a78bfa'])
+                          color_discrete_map={'Female': '#f472b6', 'Male': '#60a5fa'},
+                          color_discrete_sequence=['#a78bfa'])
             wrap_chart(fig2, height=380, xaxis_extra={'tickangle': -30})
 
         st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
@@ -1749,7 +1598,9 @@ elif page == "📅 Year Wise Breakdown":
                     g_dist = year_df['Gender'].value_counts()
                     fig_g1 = px.pie(names=g_dist.index, values=g_dist.values,
                                     title=f"Gender Distribution ({selected_year})", hole=0.5,
-                                    color_discrete_sequence=['#60a5fa', '#f472b6', '#a78bfa'])
+                                    color=g_dist.index,
+                                    color_discrete_map={'Female': '#f472b6', 'Male': '#60a5fa'},
+                                    color_discrete_sequence=['#a78bfa'])
                     fig_g1.update_traces(textfont_color='#e2e8f0', marker_line_color='rgba(0,0,0,0)')
                     wrap_chart(fig_g1, height=380)
 
@@ -1760,7 +1611,8 @@ elif page == "📅 Year Wise Breakdown":
                           .size().reset_index(name='Count'))
                     fig_g2 = px.bar(gp, x='Program1', y='Count', color='Gender',
                                     title=f"Program Preference by Gender ({selected_year})", barmode='group',
-                                    color_discrete_sequence=['#60a5fa', '#f472b6', '#a78bfa'])
+                                    color_discrete_map={'Female': '#f472b6', 'Male': '#60a5fa'},
+                                    color_discrete_sequence=['#a78bfa'])
                     wrap_chart(fig_g2, height=380, xaxis_extra={'tickangle': -30})
 
                 st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
