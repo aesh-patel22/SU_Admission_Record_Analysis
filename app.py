@@ -1393,7 +1393,39 @@ elif page == "📅 Year Wise Breakdown":
         # Render chosen metric view for this year
         if selected_metric == "🏆 Program Popularity":
             st.markdown(f"### 🏆 Program Popularity — AY {selected_year}")
-            if 'Program1' in year_df.columns:
+
+            if selected_year == "2026-2027":
+                # For 2026–2027, count a student's selection across ALL
+                # Program1–Program10 preference columns, matching the
+                # program-popularity analysis performed on the 2026–27 dataset.
+                program_cols = [f"Program{i}" for i in range(1, 11) if f"Program{i}" in year_df.columns]
+                if program_cols:
+                    program_selections = pd.concat(
+                        [year_df[col].dropna().astype(str).str.strip() for col in program_cols],
+                        ignore_index=True
+                    )
+                    program_selections = program_selections[
+                        program_selections.ne('') & program_selections.ne('nan')
+                    ]
+                    top15_yr = program_selections.value_counts().head(15).reset_index()
+                    top15_yr.columns = ['Program', 'Count']
+
+                    fig_p = px.bar(
+                        top15_yr, x='Count', y='Program', orientation='h',
+                        text_auto=True,
+                        title="Top 15 Programs by Demand — 2026–2027 (Program1–Program10)",
+                        color='Count', color_continuous_scale='Blues'
+                    )
+                    fig_p.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
+                    wrap_chart(fig_p, height=560, yaxis_extra={'categoryorder': 'total ascending'})
+                    st.caption(
+                        f"Based on {len(program_selections):,} selections across {len(program_cols)} program-preference columns "
+                        f"and {top15_yr.shape[0]} top programs. Total distinct programs: {program_selections.nunique():,}."
+                    )
+                else:
+                    st.info("Program preference columns are not available for 2026–2027.")
+            elif 'Program1' in year_df.columns:
+                # Keep the existing logic unchanged for the other academic years.
                 top15_yr = year_df['Program1'].value_counts().head(15).reset_index()
                 top15_yr.columns = ['Program', 'Count']
                 fig_p = px.bar(top15_yr, x='Count', y='Program', orientation='h',
