@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+import re
 
 try:
     import anthropic
@@ -543,6 +544,333 @@ def find_column(df: pd.DataFrame, keyword: str):
     return None
 
 
+# ====================== PROGRAM POPULARITY (matches source workbook) ======================
+# The official "Program Popularity" numbers (see PROGRAM_POPULARITY.txt) were produced in
+# Excel with:
+#   =LET(courses, UNIQUE(TOCOL(CM5:CV7451,1)),
+#        counts,  COUNTIF(CM5:CV7451, courses),
+#        SORT(HSTACK(courses, counts), 2, -1))
+#
+# CM:CV is a BLOCK of program-preference columns (an applicant can show up in more than one
+# preference column), not just the single first-choice "Program1" field. COUNTIF/UNIQUE are
+# case-insensitive, so two rows that differ only in casing (e.g. "Bachelor Of Laws" vs
+# "BACHELOR OF LAWS") are still counted as the same program. The helpers below reproduce that
+# behaviour in pandas instead of hardcoding any numbers.
+_PROGRAM_COL_PATTERN = re.compile(r'^\s*program\s*\d*\s*$', re.IGNORECASE)
+
+
+def get_program_choice_columns(df: pd.DataFrame):
+    """
+    Find every program-preference column in the dataframe (Program1, Program2, ... —
+    whatever the raw export contains), mirroring the CM:CV column block used in the
+    workbook formula. Falls back to just 'Program1' if no numbered variants exist, so
+    behaviour is unchanged for source files that only ever had a single program field.
+    """
+    def _num(c):
+        m = re.search(r'\d+', str(c))
+        return int(m.group()) if m else 0
+
+    cols = [c for c in df.columns if _PROGRAM_COL_PATTERN.match(str(c))]
+    cols = sorted(cols, key=_num)
+    if cols:
+        return cols
+    return ['Program1'] if 'Program1' in df.columns else []
+
+
+@st.cache_data(show_spinner=False)
+def compute_program_popularity(df: pd.DataFrame) -> pd.Series:
+    """
+    Reproduces =LET(courses, UNIQUE(TOCOL(range,1)), counts, COUNTIF(range, courses),
+    SORT(HSTACK(courses, counts), 2, -1)) — i.e. flattens ALL program-preference columns
+    (row-major, same order TOCOL uses by default), counts every occurrence of each program
+    case-insensitively, and returns them sorted by count descending. Returns a Series of
+    counts indexed by Program name (highest first) — use .head(N) for a top-N cut.
+    """
+    cols = get_program_choice_columns(df)
+    if df.empty or not cols:
+        return pd.Series(dtype=int)
+
+    # Row-major flatten (numpy default 'C' order) == TOCOL's default row-by-row scan.
+    flat = pd.Series(df[cols].to_numpy().ravel(), dtype='object')
+    flat = flat.dropna().astype(str).str.strip()
+    flat = flat[(flat != '') & (~flat.str.lower().isin(['nan', 'none', 'nat']))]
+    if flat.empty:
+        return pd.Series(dtype=int)
+
+    # COUNTIF/UNIQUE are case-insensitive — group on a case-folded key, but keep the
+    # first-seen original casing as the display label (matches UNIQUE's dedup behaviour).
+    key = flat.str.casefold()
+    first_label = flat.groupby(key).first()
+    counts = key.value_counts()
+    result = counts.rename(index=first_label).sort_values(ascending=False)
+    result.index.name = 'Program'
+    return result
+
+
+EXPECTED_PROGRAM_POPULARITY = {
+    '2026-2027': {
+        'Bachelor of Business Administration': 1177,
+        'Bachelor of Commerce': 977,
+        'B.Sc. (Artificial Intelligence and Data Science)': 509,
+        'B.Sc. (Information Technology)': 479,
+        'Bachelor of Computer Application': 428,
+        'B.Sc. (Environmental Science)': 402,
+        'Bachelor of Laws': 381,
+        'BACHELOR OF INTERIOR DESIGN': 341,
+        'B.Sc. (Biotechnology)': 322,
+        'B.Sc. (Computer Science)': 312,
+        'Bachelor of Technology in Computer Engineering': 300,
+        'M.Sc. (Artificial Intelligence and Data Science)': 290,
+        'B.Sc. (Microbiology)': 282,
+        'B.Sc. (Chemistry)': 276,
+        'M.Sc. (Information Technology)': 266,
+        'Bachelor of Technology in Artificial Intelligence and Data Science': 265,
+        'M.Sc. (Mobile and Cloud Technologies)': 197,
+        'BACHELOR OF ARCHITECTURE': 187,
+        'Bachelor of Technology in Electronics and Communication Engineering': 185,
+        'Bachelor of Technology in Information Technology': 177,
+        'Master of Computer Applications': 151,
+        'BACHELOR OF VISUAL ARTS': 111,
+        'Bachelor of Technology in Mechanical Engineering': 89,
+        'Master of Business Administration (M.B.A.)': 88,
+        'Bachelor of Technology in Electrical Engineering': 83,
+        'M.Sc. (Microbiology)': 80,
+        'Master of Computer Applications (Integrated)': 78,
+        'Bachelor of Technology in Civil Engineering': 63,
+        'M.Sc. (Clinical Embryology)': 58,
+        'Certificate Course in SPSS': 57,
+        'Post Graduate Diploma In Medical Laboratory Technology': 55,
+        'MASTER OF PLANNING ( URBAN & REGIONAL PLANNING )': 53,
+        'M.Sc. (Medical Laboratory Technology)': 51,
+        'Master of Commerce': 50,
+        'Bachelor of Technology in Chemical Engineering': 49,
+        'Bachelor of Technology in Instrumentation and Control Engineering': 47,
+        'Bachelor of Arts in Psychology': 42,
+        'M.Sc. (Industrial Microbiology)': 40,
+        'M.Sc. (Biotechnology)': 37,
+        'Master of Laws in Corporate and Commercial Laws': 32,
+        'Bachelor of Arts in Economics': 32,
+        'Bachelor of Performing Arts In Music (Vocal)': 31,
+        'Master of Laws in Cyber Law and Cyber Security': 27,
+        'Bachelor of Performing Arts In Drama': 23,
+        'MASTER OF INTERIOR DESIGN': 22,
+        'MASTER OF ARCHITECTURE (URBAN DESIGN)': 21,
+        'M.Sc. (Medical Biotechnology)': 21,
+        'Post Graduate Diploma in Financial and Banking Services': 19,
+        'Post Graduate Diploma in Tax Management': 18,
+        'M.Sc. (Genetics)': 18,
+        'Post Graduate Diploma in Banking': 17,
+        'Certificate Course in Intellectual Property Law: Rights, Policy and Practice': 17,
+        'Post Graduate Diploma in Human Resource Management': 16,
+        'Master of Performing Arts In Music (Vocal)': 15,
+        'Master of Performing Arts In Dance': 15,
+        'Bachelor of Performing Arts In Dance': 13,
+        'M.Sc. (Environmental Science (Industrial Safety And Management))': 12,
+        'Certificate Course in Gender Equity at Workplace: Issues, Rights and Transformation': 12,
+        'M.Sc. (Environmental Science)': 11,
+        'Master of Performing Arts In Drama': 10,
+        'M.Tech. Computer Engineering (Software Engineering)': 8,
+        'M.Sc. (Organic Chemistry)': 7,
+        'M.Tech. Civil (Structural Engineering)': 2,
+        'M.Tech. Environmental Engineering': 1,
+    },
+    '2025-2026': {
+        'Bachelor of Business Administration': 1682,
+        'Bachelor of Commerce': 1160,
+        'B.Sc. (Information Technology)': 972,
+        'Bachelor of Computer Application': 794,
+        'B.Sc. (Environmental Science)': 671,
+        'Bachelor of Laws': 591,
+        'B.Sc. (Artificial Intelligence and Data Science)': 482,
+        'B.Sc. (Biotechnology)': 457,
+        'B.Sc. (Computer Science)': 430,
+        'B.Sc. (Microbiology)': 399,
+        'B.Sc. (Chemistry)': 326,
+        'BACHELOR OF INTERIOR DESIGN': 326,
+        'M.Sc. (Information Technology)': 253,
+        'Bachelor of Technology in Computer Engineering': 242,
+        'BACHELOR OF ARCHITECTURE': 211,
+        'M.Sc. (Artificial Intelligence and Data Science)': 189,
+        'M.Sc. (Web And Mobile Technology)': 189,
+        'M.Sc. (Advanced Computing)': 179,
+        'Bachelor of Technology in Artificial Intelligence and Data Science': 176,
+        'Bachelor of Technology in Information Technology': 156,
+        'Master of Computer Applications': 155,
+        'Master of Computer Applications (Integrated)': 154,
+        'M.Sc. (Mobile and Cloud Technologies)': 141,
+        'BACHELOR OF VISUAL ARTS': 123,
+        'Master of Business Administration (M.B.A.)': 122,
+        'M.Sc. (Microbiology)': 122,
+        'Bachelor of Technology in Electronics and Communication Engineering': 118,
+        'Master of Commerce': 78,
+        'M.Sc. (Clinical Embryology)': 69,
+        'MASTER OF PLANNING ( URBAN & REGIONAL PLANNING )': 66,
+        'M.Sc. (Biotechnology)': 65,
+        'Bachelor of Technology in Mechanical Engineering': 58,
+        'M.Sc. (Medical Laboratory Technology)': 55,
+        'Post Graduate Diploma In Medical Laboratory Technology': 54,
+        'Bachelor of Performing Arts In Music (Vocal)': 53,
+        'Master of Laws in Cyber Law and Cyber Security': 52,
+        'Bachelor of Technology in Electrical Engineering': 50,
+        'M.Sc. (Industrial Microbiology)': 46,
+        'Master of Laws in Corporate and Commercial Laws': 43,
+        'M.Sc. (Medical Biotechnology)': 43,
+        'Bachelor of Technology in Civil Engineering': 41,
+        'Bachelor of Technology in Chemical Engineering': 39,
+        'Bachelor of Performing Arts In Drama': 33,
+        'M.Sc. (Environmental Science)': 31,
+        'M.Sc. (Genetics)': 30,
+        'Bachelor of Technology in Instrumentation and Control Engineering': 28,
+        'MASTER OF ARCHITECTURE (URBAN DESIGN)': 28,
+        'M.Sc. (Organic Chemistry)': 26,
+        'M.Sc. (Environmental Science (Industrial Safety And Management))': 25,
+        'MASTER OF INTERIOR DESIGN': 22,
+        'Master of Performing Arts In Music (Vocal)': 20,
+        'Bachelor of Performing Arts In Dance': 20,
+        'Master of Performing Arts In Dance': 15,
+        'M.Tech. Computer Engineering (Software Engineering)': 12,
+        'Post Graduate Diploma in Human Resource Management': 9,
+        'Post Graduate Diploma in Financial and Banking Services': 4,
+        'M.Tech. Environmental Engineering': 2,
+        'M.Tech. Civil (Structural Engineering)': 2,
+        'M.Tech. Town And Country Planning': 2,
+    },
+    '2024-2025': {
+        'Bachelor of Business Administration': 1590,
+        'B.Sc. (Information Technology)': 1480,
+        'Bachelor of Commerce': 1189,
+        'Bachelor of Computer Application': 1175,
+        'B.Sc. (Computer Science)': 370,
+        'Bachelor of Technology in Computer Engineering': 318,
+        'Bachelor of Laws': 301,
+        'B.Sc. (Microbiology)': 292,
+        'B.Sc. (Biotechnology)': 282,
+        'BACHELOR OF INTERIOR DESIGN': 245,
+        'Bachelor of Technology in Information Technology': 234,
+        'Bachelor of Technology in Artificial Intelligence and Data Science': 223,
+        'B.Sc. (Environmental Science)': 190,
+        'Master of Business Administration (M.B.A.)': 140,
+        'BACHELOR OF VISUAL ARTS': 139,
+        'BACHELOR OF ARCHITECTURE': 138,
+        'M.Sc. (Information Technology)': 130,
+        'Master of Computer Applications': 126,
+        'M.Sc. (Microbiology)': 119,
+        'B.Sc. (Chemistry)': 114,
+        'Master of Commerce': 105,
+        'Bachelor of Technology in Electronics and Communication Engineering': 101,
+        'M.Sc. (Advanced Computing)': 93,
+        'M.Sc. (Web And Mobile Technology)': 83,
+        'Post Graduate Diploma In Medical Laboratory Technology': 76,
+        'MASTER OF PLANNING ( URBAN & REGIONAL PLANNING )': 75,
+        'M.Sc. (Medical Laboratory Technology)': 60,
+        'M.Sc. (Biotechnology)': 55,
+        'Bachelor of Technology in Electrical Engineering': 51,
+        'Bachelor of Performing Arts In Music (Vocal)': 48,
+        'Bachelor of Technology in Mechanical Engineering': 41,
+        'Bachelor of Performing Arts In Drama': 37,
+        'M.Sc. (Industrial Microbiology)': 36,
+        'M.Sc. (Environmental Science)': 32,
+        'Bachelor of Performing Arts In Dance': 31,
+        'Bachelor of Technology in Chemical Engineering': 31,
+        'Bachelor of Technology in Civil Engineering': 31,
+        'Bachelor of Technology in Instrumentation and Control Engineering': 26,
+        'M.Sc. (Medical Biotechnology)': 26,
+        'M.Sc. (Environmental Science (Industrial Safety And Management))': 23,
+        'M.Sc. (Clinical Embryology)': 22,
+        'MASTER OF ARCHITECTURE (URBAN DESIGN)': 21,
+        'M.Sc. (Organic Chemistry)': 15,
+        'Master of Performing Arts In Music (Vocal)': 14,
+        'MASTER OF INTERIOR DESIGN': 14,
+        'Master of Performing Arts In Dance': 12,
+        'M.Tech. Computer Engineering (Software Engineering)': 11,
+        'M.Tech. Civil (Structural Engineering)': 6,
+        'M.Tech. Town And Country Planning': 5,
+        'M.Tech. Environmental Engineering': 4,
+        'Master of Performing Arts In Drama': 3,
+    },
+    '2023-2024': {
+        'B.Sc. (Information Technology)': 1742,
+        'Bachelor of Computer Application': 1384,
+        'Bachelor of Business Administration': 1336,
+        'Bachelor of Commerce': 1295,
+        'B.Sc. (Computer Science)': 546,
+        'Bachelor of Laws': 395,
+        'B.Sc. (Biotechnology)': 379,
+        'B.Sc. (Microbiology)': 376,
+        'B.Sc. (Chemistry)': 269,
+        'Bachelor of Technology in Computer Engineering': 244,
+        'Master of Business Administration (M.B.A.)': 223,
+        'BACHELOR OF INTERIOR DESIGN': 221,
+        'B.Sc. (Environmental Science)': 211,
+        'M.Sc. (Microbiology)': 185,
+        'Bachelor of Technology in Information Technology': 173,
+        'BACHELOR OF VISUAL ARTS': 150,
+        'M.Sc. (Medical Laboratory Technology)': 137,
+        'BACHELOR OF ARCHITECTURE': 130,
+        'Post Graduate Diploma In Medical Laboratory Technology': 129,
+        'Bachelor of Technology in Artificial Intelligence and Data Science': 124,
+        'M.Sc. (Industrial Microbiology)': 120,
+        'Master of Commerce': 90,
+        'Master of Computer Applications': 89,
+        'M.Sc. (Biotechnology)': 86,
+        'M.Sc. (Information Technology)': 77,
+        'M.Sc. (Environmental Science)': 68,
+        'M.Sc. (Medical Biotechnology)': 64,
+        'M.Sc. (Environmental Science (Industrial Safety And Management))': 58,
+        'M.Sc. (Web And Mobile Technology)': 56,
+        'M.Sc. (Advanced Computing)': 56,
+        'MASTER OF PLANNING ( URBAN & REGIONAL PLANNING )': 51,
+        'Bachelor of Performing Arts In Music (Vocal)': 44,
+        'Bachelor of Performing Arts In Drama': 39,
+        'Bachelor of Technology in Electronics and Communication Engineering': 37,
+        'Master of Performing Arts In Music (Vocal)': 28,
+        'MASTER OF ARCHITECTURE (URBAN DESIGN)': 28,
+        'Bachelor of Technology in Mechanical Engineering': 25,
+        'Bachelor of Performing Arts In Dance': 22,
+        'Bachelor of Technology in Chemical Engineering': 19,
+        'Bachelor of Technology in Electrical Engineering': 19,
+        'Master of Performing Arts In Drama': 18,
+        'Bachelor of Technology in Civil Engineering': 17,
+        'MASTER OF INTERIOR DESIGN': 15,
+        'Bachelor of Technology in Instrumentation and Control Engineering': 14,
+        'Master of Performing Arts In Dance': 12,
+        'M.Sc. (Organic Chemistry)': 12,
+        'DIPLOMA IN INTERIOR DESIGN': 6,
+        'M.Tech. Computer Engineering (Software Engineering)': 5,
+        'M.Tech. Civil (Structural Engineering)': 3,
+        'M.Tech. Town And Country Planning': 2,
+    },
+}
+
+
+def render_program_popularity_check(prog_counts: pd.Series, year_label: str, top_n: int = 15):
+    """
+    Optional self-check: compares the computed counts for `year_label` against the numbers
+    from the source workbook (PROGRAM_POPULARITY.txt) so it's easy to confirm the detected
+    program-preference columns line up with the official report. Silently does nothing if
+    no reference numbers are available for that year.
+    """
+    expected = EXPECTED_PROGRAM_POPULARITY.get(year_label)
+    if not expected or prog_counts.empty:
+        return
+    rows = []
+    all_match = True
+    for name in list(prog_counts.head(top_n).index):
+        computed = int(prog_counts[name])
+        # case-insensitive lookup against the reference table
+        ref = next((v for k, v in expected.items() if k.strip().casefold() == name.strip().casefold()), None)
+        ok = (ref is not None) and (ref == computed)
+        all_match = all_match and ok
+        rows.append({'Program': name, 'Computed': computed, 'Source File': ref if ref is not None else '—',
+                     'Match': '✅' if ok else '⚠️'})
+    with st.expander(f"🔍 Verify against source workbook — AY {year_label}", expanded=False):
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        if all_match:
+            st.success("All shown values match PROGRAM_POPULARITY.txt.")
+        else:
+            st.warning("Some values differ — check that get_program_choice_columns() is picking up the right columns for this file.")
+
+
 @st.cache_data(show_spinner=False)
 def get_program_training_data(df: pd.DataFrame):
     """
@@ -895,139 +1223,116 @@ elif page == "📈 Inquiry Funnel":
 
 elif page == "⏱️ Admission Lead Time":
     st.markdown('<span class="section-label">Process Efficiency</span>', unsafe_allow_html=True)
-    st.title("Admission Lead Time")
-    st.markdown('<h2>Time from the beginning of a process until its completion</h2>', unsafe_allow_html=True)
+    st.title("Admission Lead Time Calculations")
+    st.markdown('<h2>Time from the beginning of a process until its completion across all 4 Academic Years</h2>', unsafe_allow_html=True)
     st.caption("ℹ️ Note: Inquiry Date is not available in the dataset. Turnaround time calculations begin from application Submission Date.")
     st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
     if not df.empty:
         df_lt, stats = compute_lead_time_data(df)
 
-        # ── KPI Cards for the 3 Time Intervals ──
-        c1, c2, c3, c4 = st.columns(4)
+        st.markdown("### 🧮 1. Overall Admission Lead Time Calculations (All Years Combined)")
+        st.markdown(f"**Total Records Analyzed across 2023–2027:** {len(df):,} records")
 
-        sv_val = f"{stats['sv_mean']:.1f} Days" if stats['sv_mean'] >= 1 else f"{stats['sv_mean']*24:.1f} Hours"
-        vc_val = f"{stats['vc_mean']:.1f} Days"
-        sc_val = f"{stats['sc_mean']:.1f} Days"
+        col1, col2, col3 = st.columns(3)
 
-        cards = [
-            (c1, "card-blue",   "Office Response Time",     sv_val,                      "Submission → Verification"),
-            (c2, "card-green",  "Student Decision Time",    vc_val,                      "Verification → Confirmation"),
-            (c3, "card-amber",  "Total Decision Time",      sc_val,                      "Submission → Confirmation"),
-            (c4, "card-violet", "Full-Cycle Applications", f"{stats['sc_count']:,}",      "Verified & Confirmed"),
+        with col1:
+            st.markdown(f"""
+            <div class="glass-card card-blue" style="text-align:left; padding:22px;">
+                <div class="card-label">1. Submission → Verification</div>
+                <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">Response time of the admission office</div>
+                <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
+                    <b>Formula:</b> Verification Date − Submission Date<br><br>
+                    • <b>Average (Mean):</b> {stats['sv_mean']:.2f} Days ({stats['sv_mean']*24:.1f} Hours)<br>
+                    • <b>Median:</b> {stats['sv_median']:.2f} Days ({stats['sv_median']*24:.1f} Hours)<br>
+                    • <b>Tracked Records:</b> {stats['sv_count']:,}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown(f"""
+            <div class="glass-card card-green" style="text-align:left; padding:22px;">
+                <div class="card-label">2. Verification → Confirmation</div>
+                <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">Time taken by the student to decide after verification</div>
+                <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
+                    <b>Formula:</b> Confirmation Date − Verification Date<br><br>
+                    • <b>Average (Mean):</b> {stats['vc_mean']:.2f} Days<br>
+                    • <b>Median:</b> {stats['vc_median']:.2f} Days<br>
+                    • <b>Tracked Records:</b> {stats['vc_count']:,}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col3:
+            st.markdown(f"""
+            <div class="glass-card card-amber" style="text-align:left; padding:22px;">
+                <div class="card-label">3. Submission → Confirmation</div>
+                <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">Total Admission Decision Time</div>
+                <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
+                    <b>Formula:</b> Confirmation Date − Submission Date<br><br>
+                    • <b>Average (Mean):</b> {stats['sc_mean']:.2f} Days<br>
+                    • <b>Median:</b> {stats['sc_median']:.2f} Days<br>
+                    • <b>Tracked Records:</b> {stats['sc_count']:,}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
+
+        st.markdown("### 📅 2. Academic Year-by-Year Text Calculations")
+        st.markdown("This calculation covers **all 4 academic years** present in the dataset:")
+
+        years_info = [
+            ("2023", "2023-2024"),
+            ("2024", "2024-2025"),
+            ("2025", "2025-2026"),
+            ("2026", "2026-2027"),
         ]
-        for col, cls, label, value, sub in cards:
-            with col:
+
+        for y_code, y_name in years_info:
+            y_df = df_lt[df_lt['Year'] == y_code] if 'Year' in df_lt.columns else pd.DataFrame()
+            if not y_df.empty:
+                sv_v = y_df[y_df['Days_Sub_to_Ver'] >= 0]['Days_Sub_to_Ver']
+                vc_v = y_df[y_df['Days_Ver_to_Conf'] >= 0]['Days_Ver_to_Conf']
+                sc_v = y_df[y_df['Days_Sub_to_Conf'] >= 0]['Days_Sub_to_Conf']
+
+                sv_mean = sv_v.mean() if len(sv_v) > 0 else 0.0
+                sv_med = sv_v.median() if len(sv_v) > 0 else 0.0
+                vc_mean = vc_v.mean() if len(vc_v) > 0 else 0.0
+                vc_med = vc_v.median() if len(vc_v) > 0 else 0.0
+                sc_mean = sc_v.mean() if len(sc_v) > 0 else 0.0
+                sc_med = sc_v.median() if len(sc_v) > 0 else 0.0
+
                 st.markdown(f"""
-                <div class="glass-card {cls}">
-                    <div class="card-label">{label}</div>
-                    <div class="card-value">{value}</div>
-                    <div class="card-sub">{sub}</div>
-                </div>""", unsafe_allow_html=True)
-
-        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
-
-        # ── Visual Breakdown of intervals ──
-        c_left, c_right = st.columns([1, 1])
-
-        with c_left:
-            st.markdown("#### ⏱️ Turnaround Time by Stage (Mean vs Median)")
-            stage_df = pd.DataFrame({
-                'Stage Interval': [
-                    'Submission → Verification\n(Office Response)',
-                    'Verification → Confirmation\n(Student Decision)',
-                    'Submission → Confirmation\n(Total Decision Time)'
-                ],
-                'Average Days': [stats['sv_mean'], stats['vc_mean'], stats['sc_mean']],
-                'Median Days': [stats['sv_median'], stats['vc_median'], stats['sc_median']]
-            })
-            fig_stage = px.bar(
-                stage_df,
-                x='Stage Interval',
-                y=['Average Days', 'Median Days'],
-                barmode='group',
-                text_auto='.1f',
-                title="Lead Time Comparison Across Admission Stages (Days)",
-                color_discrete_sequence=['#60a5fa', '#34d399']
-            )
-            fig_stage.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
-            wrap_chart(fig_stage, height=450)
-
-        with c_right:
-            st.markdown("#### 📊 Student Decision Time Distribution")
-            vc_data = df_lt[df_lt['Days_Ver_to_Conf'] >= 0]['Days_Ver_to_Conf']
-            if not vc_data.empty:
-                bins = [-0.01, 1, 3, 7, 14, 30, 999]
-                labels = ['Same / 1 Day', '2 - 3 Days', '4 - 7 Days', '8 - 14 Days', '15 - 30 Days', '30+ Days']
-                vc_cats = pd.cut(vc_data, bins=bins, labels=labels).value_counts().reindex(labels).fillna(0).reset_index()
-                vc_cats.columns = ['Time Bracket', 'Student Count']
-                fig_dist = px.bar(
-                    vc_cats,
-                    x='Time Bracket',
-                    y='Student Count',
-                    text_auto=True,
-                    title="Time Taken by Students to Decide After Verification",
-                    color='Student Count',
-                    color_continuous_scale='Purples'
-                )
-                fig_dist.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
-                wrap_chart(fig_dist, height=450)
-
-        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
-
-        # ── Program-wise Lead Time Analysis ──
-        st.markdown("#### 🏆 Program-wise Admission Lead Time (Top Programs)")
-        if 'Program1' in df_lt.columns:
-            top_programs = df_lt['Program1'].value_counts().head(10).index
-            prog_lt = (
-                df_lt[df_lt['Program1'].isin(top_programs)]
-                .groupby('Program1', observed=True)
-                .agg(
-                    Office_Response=('Days_Sub_to_Ver', lambda x: x[x>=0].mean()),
-                    Student_Decision=('Days_Ver_to_Conf', lambda x: x[x>=0].mean()),
-                    Total_Lead_Time=('Days_Sub_to_Conf', lambda x: x[x>=0].mean())
-                )
-                .reset_index()
-            )
-            prog_lt = prog_lt.sort_values('Total_Lead_Time', ascending=True)
-
-            fig_prog = px.bar(
-                prog_lt,
-                y='Program1',
-                x=['Office_Response', 'Student_Decision'],
-                orientation='h',
-                title="Average Admission Lead Time Breakdown by Program (Days)",
-                labels={'value': 'Average Days', 'Program1': 'Program', 'variable': 'Stage'},
-                color_discrete_map={'Office_Response': '#60a5fa', 'Student_Decision': '#fbbf24'}
-            )
-            fig_prog.update_traces(marker_line_width=0)
-            wrap_chart(fig_prog, height=480)
-
-        # ── Explanation Box ──
-        st.markdown("""
-        <div style="padding:16px 20px; background:rgba(96,165,250,0.06); border:1px solid rgba(96,165,250,0.2); border-radius:14px; margin-top:20px;">
-            <div style="font-weight:700; color:#60a5fa; margin-bottom:8px;">💡 Lead Time Key Insights:</div>
-            <ul style="color:#cbd5e1; font-size:0.9rem; margin-bottom:0; padding-left:20px;">
-                <li><b>Submission → Verification (Office Response Time):</b> Verification Date − Submission Date. Response time of the admission office.</li>
-                <li><b>Verification → Confirmation (Student Decision Time):</b> Confirmation Date − Verification Date. Time taken by the student to decide after verification.</li>
-                <li><b>Submission → Confirmation (Total Decision Time):</b> Confirmation Date − Submission Date. Total admission decision time.</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+                <div style="padding:16px 20px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:14px; margin-bottom:12px;">
+                    <div style="font-weight:700; color:#60a5fa; font-size:1.05rem; margin-bottom:8px;">
+                        🗓️ Academic Year {y_name} <span style="color:#64748b; font-weight:400; font-size:0.88rem;">({len(y_df):,} Total Records)</span>
+                    </div>
+                    <ul style="color:#cbd5e1; font-size:0.92rem; margin:0; padding-left:20px; line-height:1.7;">
+                        <li><b>Submission → Verification (Office Response Time):</b> Average = <b>{sv_mean:.2f} days</b> | Median = <b>{sv_med:.2f} days</b> (Records: {len(sv_v):,})</li>
+                        <li><b>Verification → Confirmation (Student Decision Time):</b> Average = <b>{vc_mean:.2f} days</b> | Median = <b>{vc_med:.2f} days</b> (Records: {len(vc_v):,})</li>
+                        <li><b>Submission → Confirmation (Total Admission Decision Time):</b> Average = <b>{sc_mean:.2f} days</b> | Median = <b>{sc_med:.2f} days</b> (Records: {len(sc_v):,})</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
 
 elif page == "🏆 Program Popularity":
     st.markdown('<span class="section-label">Programs</span>', unsafe_allow_html=True)
     st.title("Program Popularity")
     st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
-    if not df.empty and 'Program1' in df.columns:
-        top15 = df['Program1'].value_counts().head(15).reset_index()
+    prog_counts_all = compute_program_popularity(df)
+    if not prog_counts_all.empty:
+        top15 = prog_counts_all.head(15).reset_index()
         top15.columns = ['Program', 'Count']
         fig = px.bar(top15, x='Count', y='Program', orientation='h',
                      text_auto=True, title="Top 15 Programs by Demand",
                      color='Count', color_continuous_scale='Blues')
         fig.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
         wrap_chart(fig, height=560, yaxis_extra={'categoryorder': 'total ascending'})
+    else:
+        st.info("Program data not available.")
 
 elif page == "🗺️ Geographic Analysis":
     st.markdown('<span class="section-label">Geography</span>', unsafe_allow_html=True)
@@ -1393,105 +1698,18 @@ elif page == "📅 Year Wise Breakdown":
         # Render chosen metric view for this year
         if selected_metric == "🏆 Program Popularity":
             st.markdown(f"### 🏆 Program Popularity — AY {selected_year}")
-
-           
-    if selected_year == "2026-2027":
-        # Count course selections across Program1 → Program10
-        program_cols = [
-            col for col in year_df.columns
-            if str(col).strip().lower() in
-            [f"program{i}" for i in range(1, 11)]
-        ]
-
-        if program_cols:
-            # Combine all 10 program preference columns
-            program_selections = (
-                year_df[program_cols]
-                .apply(lambda col: col.astype(str).str.strip())
-                .stack()
-            )
-
-            # Remove blank / missing values
-            program_selections = program_selections[
-                program_selections.notna()
-                & (program_selections != "")
-                & (program_selections.str.lower() != "nan")
-            ]
-
-            # Count every course selection across Program 1–10
-            program_counts = (
-                program_selections
-                .value_counts()
-                .head(10)
-                .reset_index()
-            )
-
-            program_counts.columns = ["Program", "Count"]
-
-            fig_p = px.bar(
-                program_counts,
-                x="Count",
-                y="Program",
-                orientation="h",
-                text_auto=True,
-                title="Top 10 Programs by Demand (2026–2027)",
-                color="Count",
-                color_continuous_scale="Blues"
-            )
-
-            fig_p.update_traces(
-                marker_line_width=0,
-                textfont_color="#e2e8f0"
-            )
-
-            wrap_chart(
-                fig_p,
-                height=520,
-                yaxis_extra={"categoryorder": "total ascending"}
-            )
-
-            st.caption(
-                f"Based on {len(program_selections):,} total program selections "
-                f"across {len(program_cols)} program preference columns."
-            )
-
-        else:
-            st.info("Program 1–10 columns not available for 2026–2027.")
-
-    else:
-        # Existing logic for previous academic years
-        if "Program1" in year_df.columns:
-            top15_yr = (
-                year_df["Program1"]
-                .value_counts()
-                .head(15)
-                .reset_index()
-            )
-            top15_yr.columns = ["Program", "Count"]
-
-            fig_p = px.bar(
-                top15_yr,
-                x="Count",
-                y="Program",
-                orientation="h",
-                text_auto=True,
-                title=f"Top Programs by Demand ({selected_year})",
-                color="Count",
-                color_continuous_scale="Blues"
-            )
-
-            fig_p.update_traces(
-                marker_line_width=0,
-                textfont_color="#e2e8f0"
-            )
-
-            wrap_chart(
-                fig_p,
-                height=560,
-                yaxis_extra={"categoryorder": "total ascending"}
-            )
-        else:
-            st.info("Program data not available for this year.")
+            prog_counts_yr = compute_program_popularity(year_df)
+            if not prog_counts_yr.empty:
+                top15_yr = prog_counts_yr.head(15).reset_index()
+                top15_yr.columns = ['Program', 'Count']
+                fig_p = px.bar(top15_yr, x='Count', y='Program', orientation='h',
+                               text_auto=True, title=f"Top Programs by Demand ({selected_year})",
+                               color='Count', color_continuous_scale='Blues')
+                fig_p.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
+                wrap_chart(fig_p, height=560, yaxis_extra={'categoryorder': 'total ascending'})
+                render_program_popularity_check(prog_counts_yr, selected_year)
+            else:
+                st.info("Program data not available for this year.")
 
         elif selected_metric == "🏷️ Admissions Category":
             st.markdown(f"### 🏷️ Admissions Category — AY {selected_year}")
