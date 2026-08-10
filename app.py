@@ -1030,12 +1030,15 @@ if page == "🏠 Home Overview":
 
     st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
-    if not df.empty and 'Program1' in df.columns:
-        top10 = df['Program1'].value_counts().head(10)
+    prog_counts_home = compute_program_popularity(df)
+    if not prog_counts_home.empty:
+        top10 = prog_counts_home.head(10)
         fig = px.bar(top10, text_auto=True, title="Top 10 Most Applied Programs",
                      color_discrete_sequence=COLORS)
         fig.update_traces(marker_line_width=0, textfont_color='#e2e8f0')
         wrap_chart(fig)
+    else:
+        st.info("Program data not available.")
 
 elif page == "📈 Inquiry Funnel":
     st.markdown('<span class="section-label">Conversion</span>', unsafe_allow_html=True)
