@@ -1059,14 +1059,37 @@ elif page == "📈 Inquiry Funnel":
         wrap_chart(fig, height=550)
 
         # Mini KPI row
-        rate_sub = round(submitted / total * 100, 1) if total else 0
-        rate_con = round(confirmed / total * 100, 1) if total else 0
-        c1, c2, c3 = st.columns(3)
+        # Mini KPI row
+rate_sub = round(submitted / total * 100, 1) if total else 0
+rate_con = round(confirmed / total * 100, 1) if total else 0
+
+# Submitted → Verified conversion rate
+if 'Verification Date' in df.columns:
+    verified = (
+        df['Verification Date'].notna()
+        & df['Status'].astype(str).str.contains(
+            'Submitted|Submit',
+            na=False,
+            case=False
+        )
+        & ~df['Status'].astype(str).str.contains(
+            'Not Submitted|NotSubmitted',
+            na=False,
+            case=False
+        )
+    ).sum()
+else:
+    verified = 0
+
+rate_ver = round(verified / submitted * 100, 1) if submitted else 0
+
+c1, c2, c3, c4 = st.columns(4)
         for col, label, val, cls in [
-            (c1, "Inquiry → Submit", f"{rate_sub}%", "card-green"),
-            (c2, "Inquiry → Confirm", f"{rate_con}%", "card-amber"),
-            (c3, "Drop-off Rate", f"{round(100-rate_sub,1)}%", "card-violet"),
-        ]:
+    (c1, "Inquiry → Submit", f"{rate_sub}%", "card-green"),
+    (c2, "Submitted → Verified", f"{rate_ver}%", "card-blue"),
+    (c3, "Inquiry → Confirm", f"{rate_con}%", "card-amber"),
+    (c4, "Drop-off Rate", f"{round(100-rate_sub,1)}%", "card-violet"),
+]:
             with col:
                 st.markdown(f'<div class="glass-card {cls}"><div class="card-label">{label}</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
 
