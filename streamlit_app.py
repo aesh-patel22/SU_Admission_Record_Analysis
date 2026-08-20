@@ -321,6 +321,12 @@ def load_all_data():
 
     if missing:
         st.warning(f"⚠️ Data file(s) not found next to the app: {', '.join(missing)}")
+        try:
+            actual_files = sorted(os.listdir(BASE_DIR))
+            st.info(f"📁 App directory is: `{BASE_DIR}`\n\nFiles actually present there:\n" +
+                    "\n".join(f"- `{f}`" for f in actual_files))
+        except Exception as e:
+            st.error(f"Could not list app directory: {e}")
     if errors:
         st.error("⚠️ Failed to load some data files:\n" + "\n".join(errors))
     if not dfs:
