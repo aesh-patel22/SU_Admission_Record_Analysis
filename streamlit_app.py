@@ -1061,13 +1061,8 @@ elif page == "📈 Inquiry Funnel":
         # Mini KPI row
         rate_sub = round(submitted / total * 100, 1) if total else 0
         rate_con = round(confirmed / total * 100, 1) if total else 0
-
-        verified = (
-            df['Verification Date'].notna()
-            & df['Submission Date'].notna()
-        ).sum()
+        verified = df['Verification Date'].notna().sum()
         rate_ver = round(verified / submitted * 100, 1) if submitted else 0
-
         c1, c2, c3, c4 = st.columns(4)
 
         for col, label, val, cls in [
