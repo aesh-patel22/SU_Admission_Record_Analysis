@@ -300,35 +300,20 @@ def apply_layout(fig, height=500, xaxis_extra=None, yaxis_extra=None):
 def load_all_data():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     files = [
-        (os.path.join(BASE_DIR, "20260106153152255_Admission_2023_24.xls"), "2023"),
-        (os.path.join(BASE_DIR, "20260106153439552_Admission_2024_25.xls"), "2024"),
-        (os.path.join(BASE_DIR, "20260106153808096_Admission_2025_26.xls"), "2025"),
-        (os.path.join(BASE_DIR, "20260106153841088_Admission_2026_27.xls"), "2026"),
+        (os.path.join(BASE_DIR, "20260106153152255_Admission 2023 24.xls"), "2023"),
+        (os.path.join(BASE_DIR, "20260106153439552_Admission 2024 25.xls"), "2024"),
+        (os.path.join(BASE_DIR, "20260106153808096_Admission 2025 26.xls"), "2025"),
+        (os.path.join(BASE_DIR, "20260106153841088_Admission 2026 27.xls"), "2026"),
     ]
     dfs = []
-    missing = []
-    errors = []
     for path, year in files:
-        if not os.path.exists(path):
-            missing.append(os.path.basename(path))
-            continue
-        try:
-            df_temp = pd.read_excel(path, header=3, engine='xlrd')
-            df_temp['Year'] = year
-            dfs.append(df_temp)
-        except Exception as e:
-            errors.append(f"{os.path.basename(path)}: {e}")
-
-    if missing:
-        st.warning(f"⚠️ Data file(s) not found next to the app: {', '.join(missing)}")
-        try:
-            actual_files = sorted(os.listdir(BASE_DIR))
-            st.info(f"📁 App directory is: `{BASE_DIR}`\n\nFiles actually present there:\n" +
-                    "\n".join(f"- `{f}`" for f in actual_files))
-        except Exception as e:
-            st.error(f"Could not list app directory: {e}")
-    if errors:
-        st.error("⚠️ Failed to load some data files:\n" + "\n".join(errors))
+        if os.path.exists(path):
+            try:
+                df_temp = pd.read_excel(path, header=3, engine='xlrd')
+                df_temp['Year'] = year
+                dfs.append(df_temp)
+            except Exception:
+                pass
     if not dfs:
         return pd.DataFrame()
     return pd.concat(dfs, ignore_index=True)
@@ -395,21 +380,12 @@ def get_confirmed_count(df: pd.DataFrame) -> int:
 
 
 @st.cache_data(show_spinner=False)
-def get_verified_count(df: pd.DataFrame) -> int:
-    """Count of applicants whose 'Verified' column is Yes/True/1 — i.e.
-    those whose Submitted application has moved into the Verified stage."""
-    if df.empty or 'Verified' not in df.columns:
-        return 0
-    return int(df['Verified'].astype(str).str.strip().str.lower().isin(['yes', 'true', '1']).sum())
-
-
-@st.cache_data(show_spinner=False)
 def compute_lead_time_data(df: pd.DataFrame):
     if df.empty:
         return pd.DataFrame(), {
-            'sv_mean': 0.0, 'sv_median': 0.0, 'sv_count': 0, 'sv_negative': 0,
-            'vc_mean': 0.0, 'vc_median': 0.0, 'vc_count': 0, 'vc_negative': 0,
-            'sc_mean': 0.0, 'sc_median': 0.0, 'sc_count': 0, 'sc_negative': 0,
+            'sv_mean': 0.0, 'sv_median': 0.0, 'sv_count': 0,
+            'vc_mean': 0.0, 'vc_median': 0.0, 'vc_count': 0,
+            'sc_mean': 0.0, 'sc_median': 0.0, 'sc_count': 0,
         }
 
     df_lt = df.copy()
@@ -436,35 +412,20 @@ def compute_lead_time_data(df: pd.DataFrame):
     df_lt['Days_Ver_to_Conf'] = (df_lt['_c_dt'] - df_lt['_v_dt']).dt.total_seconds() / (24 * 3600)
     df_lt['Days_Sub_to_Conf'] = (df_lt['_c_dt'] - df_lt['_s_dt']).dt.total_seconds() / (24 * 3600)
 
-    # A record only enters a metric's "valid" pool once BOTH dates for that
-    # step exist (non-null). Among those, negative gaps (later stage dated
-    # before the earlier stage — a data-entry error) are excluded from every
-    # stat/chart but counted separately so we can flag them to the user.
-    sv_pairs = df_lt['Days_Sub_to_Ver'].notna()
-    vc_pairs = df_lt['Days_Ver_to_Conf'].notna()
-    sc_pairs = df_lt['Days_Sub_to_Conf'].notna()
-
-    sv_valid = df_lt.loc[sv_pairs & (df_lt['Days_Sub_to_Ver'] >= 0), 'Days_Sub_to_Ver']
-    vc_valid = df_lt.loc[vc_pairs & (df_lt['Days_Ver_to_Conf'] >= 0), 'Days_Ver_to_Conf']
-    sc_valid = df_lt.loc[sc_pairs & (df_lt['Days_Sub_to_Conf'] >= 0), 'Days_Sub_to_Conf']
-
-    sv_negative = int((sv_pairs & (df_lt['Days_Sub_to_Ver'] < 0)).sum())
-    vc_negative = int((vc_pairs & (df_lt['Days_Ver_to_Conf'] < 0)).sum())
-    sc_negative = int((sc_pairs & (df_lt['Days_Sub_to_Conf'] < 0)).sum())
+    sv_valid = df_lt[df_lt['Days_Sub_to_Ver'] >= 0]['Days_Sub_to_Ver']
+    vc_valid = df_lt[df_lt['Days_Ver_to_Conf'] >= 0]['Days_Ver_to_Conf']
+    sc_valid = df_lt[df_lt['Days_Sub_to_Conf'] >= 0]['Days_Sub_to_Conf']
 
     stats = {
         'sv_mean': float(sv_valid.mean()) if len(sv_valid) > 0 else 0.0,
         'sv_median': float(sv_valid.median()) if len(sv_valid) > 0 else 0.0,
         'sv_count': int(len(sv_valid)),
-        'sv_negative': sv_negative,
         'vc_mean': float(vc_valid.mean()) if len(vc_valid) > 0 else 0.0,
         'vc_median': float(vc_valid.median()) if len(vc_valid) > 0 else 0.0,
         'vc_count': int(len(vc_valid)),
-        'vc_negative': vc_negative,
         'sc_mean': float(sc_valid.mean()) if len(sc_valid) > 0 else 0.0,
         'sc_median': float(sc_valid.median()) if len(sc_valid) > 0 else 0.0,
         'sc_count': int(len(sc_valid)),
-        'sc_negative': sc_negative,
     }
     return df_lt, stats
 
@@ -1098,30 +1059,16 @@ elif page == "📈 Inquiry Funnel":
         wrap_chart(fig, height=550)
 
         # Mini KPI row
-        # Keep all original KPI calculations unchanged.
         rate_sub = round(submitted / total * 100, 1) if total else 0
         rate_con = round(confirmed / total * 100, 1) if total else 0
-
-        # Submitted → Verified: genuine combined rate across all 4 academic years.
-        # Verified submitted applicants = 13,015; submitted applicants = 16,793.
-        verified_submitted = 13015
-        submitted_combined = 16793
-        rate_ver = round(verified_submitted / submitted_combined * 100, 1)
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3 = st.columns(3)
         for col, label, val, cls in [
             (c1, "Inquiry → Submit", f"{rate_sub}%", "card-green"),
             (c2, "Inquiry → Confirm", f"{rate_con}%", "card-amber"),
             (c3, "Drop-off Rate", f"{round(100-rate_sub,1)}%", "card-violet"),
-            (c4, "Submitted → Verified", f"{rate_ver}%", "card-blue"),
         ]:
             with col:
                 st.markdown(f'<div class="glass-card {cls}"><div class="card-label">{label}</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
-
-        st.caption(
-            f"ℹ️ Submitted → Verified = Verified submitted applicants ÷ Submitted applicants, "
-            f"summed across all 4 academic years (2023‑24 to 2026‑27) = "
-            f"{verified_submitted:,} ÷ {submitted_combined:,} × 100 = {rate_ver}%."
-        )
 
 elif page == "⏱️ Admission Lead Time":
     st.markdown('<span class="section-label">Process Efficiency</span>', unsafe_allow_html=True)
@@ -1130,152 +1077,59 @@ elif page == "⏱️ Admission Lead Time":
     st.caption("ℹ️ Note: Inquiry Date is not available in the dataset. Turnaround time calculations begin from application Submission Date.")
     st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
-    # Formula strings reused for both card text and chart hover tooltips
-    LT_FORMULAS = {
-        'sv': dict(
-            label="Submission → Verification",
-            sub="Response time of the admission office",
-            formula="Verification Date − Submission Date",
-            calc="For every applicant, subtract the Submission Date from the Verification Date. A smaller value means the office reviewed/verified the form faster.",
-        ),
-        'vc': dict(
-            label="Verification → Confirmation",
-            sub="Time taken by the student to decide after verification",
-            formula="Confirmation Date − Verification Date",
-            calc="For every applicant, subtract the Verification Date from the Confirmation Date. A smaller value means the student confirmed their seat faster after verification.",
-        ),
-        'sc': dict(
-            label="Submission → Confirmation",
-            sub="Total Admission Decision Time",
-            formula="Confirmation Date − Submission Date",
-            calc="For every applicant, subtract the Submission Date from the Confirmation Date. This is the end-to-end time for the whole admission decision (equal to step 1 + step 2).",
-        ),
-    }
-
     if not df.empty:
         df_lt, stats = compute_lead_time_data(df)
-        total_negative = stats['sv_negative'] + stats['vc_negative'] + stats['sc_negative']
 
         st.markdown("### 🧮 1. Overall Admission Lead Time Calculations (All Years Combined)")
         st.markdown(f"**Total Records Analyzed across 2023–2027:** {len(df):,} records")
 
         col1, col2, col3 = st.columns(3)
-        card_specs = [
-            (col1, "card-blue", "sv", stats['sv_mean'], stats['sv_median'], stats['sv_count'], stats['sv_negative'], True),
-            (col2, "card-green", "vc", stats['vc_mean'], stats['vc_median'], stats['vc_count'], stats['vc_negative'], False),
-            (col3, "card-amber", "sc", stats['sc_mean'], stats['sc_median'], stats['sc_count'], stats['sc_negative'], False),
-        ]
-        for i, (col, cls, key, mean_v, med_v, cnt, neg, show_hours) in enumerate(card_specs, start=1):
-            f = LT_FORMULAS[key]
-            hours_txt = f" ({mean_v*24:.1f} Hours)" if show_hours else ""
-            hours_txt_med = f" ({med_v*24:.1f} Hours)" if show_hours else ""
-            neg_line = (
-                f'<div style="margin-top:10px; padding:8px 10px; background:rgba(248,113,113,0.10); '
-                f'border:1px solid rgba(248,113,113,0.3); border-radius:8px; color:#fca5a5; font-size:0.78rem;">'
-                f'⚠️ {neg:,} record(s) had a <b>negative date gap</b> (later stage dated before the earlier stage) '
-                f'and were <b>ignored/excluded</b> from this calculation.</div>'
-                if neg > 0 else
-                '<div style="margin-top:10px; padding:8px 10px; background:rgba(52,211,153,0.08); '
-                'border:1px solid rgba(52,211,153,0.25); border-radius:8px; color:#6ee7b7; font-size:0.78rem;">'
-                '✅ No negative date gaps found for this step.</div>'
-            )
-            with col:
-                st.markdown(f"""
-                <div class="glass-card {cls}" style="text-align:left; padding:22px;">
-                    <div class="card-label">{i}. {f['label']}</div>
-                    <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">{f['sub']}</div>
-                    <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
-                        <b>Formula:</b> {f['formula']}<br><br>
-                        • <b>Average (Mean):</b> {mean_v:.2f} Days{hours_txt}<br>
-                        • <b>Median:</b> {med_v:.2f} Days{hours_txt_med}<br>
-                        • <b>Tracked (valid) Records:</b> {cnt:,}
-                    </div>
-                    {neg_line}
+
+        with col1:
+            st.markdown(f"""
+            <div class="glass-card card-blue" style="text-align:left; padding:22px;">
+                <div class="card-label">1. Submission → Verification</div>
+                <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">Response time of the admission office</div>
+                <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
+                    <b>Formula:</b> Verification Date − Submission Date<br><br>
+                    • <b>Average (Mean):</b> {stats['sv_mean']:.2f} Days ({stats['sv_mean']*24:.1f} Hours)<br>
+                    • <b>Median:</b> {stats['sv_median']:.2f} Days ({stats['sv_median']*24:.1f} Hours)<br>
+                    • <b>Tracked Records:</b> {stats['sv_count']:,}
                 </div>
-                """, unsafe_allow_html=True)
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown("")
-        if total_negative > 0:
-            st.warning(
-                f"⚠️ **Negative-date records ignored:** {total_negative:,} record instance(s) across the three metrics "
-                f"(Submission→Verification: {stats['sv_negative']}, Verification→Confirmation: {stats['vc_negative']}, "
-                f"Submission→Confirmation: {stats['sc_negative']}) had a later-stage date earlier than the "
-                f"prior stage's date — almost always a data-entry mistake. These were **excluded from every average, "
-                f"median, and chart below** so they don't distort the lead-time picture."
-            )
-        else:
-            st.success("✅ No negative date gaps were found in the dataset — every record used in the calculations below is valid.")
+        with col2:
+            st.markdown(f"""
+            <div class="glass-card card-green" style="text-align:left; padding:22px;">
+                <div class="card-label">2. Verification → Confirmation</div>
+                <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">Time taken by the student to decide after verification</div>
+                <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
+                    <b>Formula:</b> Confirmation Date − Verification Date<br><br>
+                    • <b>Average (Mean):</b> {stats['vc_mean']:.2f} Days<br>
+                    • <b>Median:</b> {stats['vc_median']:.2f} Days<br>
+                    • <b>Tracked Records:</b> {stats['vc_count']:,}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
-
-        # ---- Distribution chart (box plot) — hover shows formula + quartiles ----
-        st.markdown("### 📦 2. Distribution of Lead Times (All Years Combined)")
-        st.caption("Hover over a box to see the exact formula used and the underlying statistics for that step. Negative-gap records are excluded.")
-
-        fig_box = go.Figure()
-        box_specs = [
-            ('sv', stats['sv_count'], '#60a5fa'),
-            ('vc', stats['vc_count'], '#34d399'),
-            ('sc', stats['sc_count'], '#fbbf24'),
-        ]
-        for key, cnt, color in box_specs:
-            f = LT_FORMULAS[key]
-            series = df_lt.loc[
-                df_lt[{'sv': 'Days_Sub_to_Ver', 'vc': 'Days_Ver_to_Conf', 'sc': 'Days_Sub_to_Conf'}[key]] >= 0,
-                {'sv': 'Days_Sub_to_Ver', 'vc': 'Days_Ver_to_Conf', 'sc': 'Days_Sub_to_Conf'}[key]
-            ]
-            fig_box.add_trace(go.Box(
-                y=series,
-                name=f['label'],
-                marker_color=color,
-                boxmean=True,
-                hovertemplate=(
-                    f"<b>{f['label']}</b><br>"
-                    f"Formula: {f['formula']}<br>"
-                    f"How it's calculated: {f['calc']}<br><br>"
-                    "Median: %{median:.2f} days<br>"
-                    "Q1 – Q3: %{q1:.2f} – %{q3:.2f} days<br>"
-                    "Min – Max (excl. outliers): %{lowerfence:.2f} – %{upperfence:.2f} days<br>"
-                    f"Valid records used: {cnt:,} (negative-gap records excluded)"
-                    "<extra></extra>"
-                ),
-            ))
-        wrap_chart(fig_box, height=460, yaxis_extra={'title': 'Days'})
-
-        # ---- Mean vs Median comparison bar chart — hover shows formula ----
-        st.markdown("### 📊 3. Mean vs Median Comparison (All Years Combined)")
-        st.caption("Hover over any bar to see the formula behind that number.")
-
-        bar_rows = []
-        for key in ['sv', 'vc', 'sc']:
-            f = LT_FORMULAS[key]
-            bar_rows.append({'Metric': f['label'], 'Stat': 'Mean', 'Days': stats[f'{key}_mean'],
-                              'Formula': f['formula'], 'Calc': f['calc'], 'Records': stats[f'{key}_count']})
-            bar_rows.append({'Metric': f['label'], 'Stat': 'Median', 'Days': stats[f'{key}_median'],
-                              'Formula': f['formula'], 'Calc': f['calc'], 'Records': stats[f'{key}_count']})
-        bar_df = pd.DataFrame(bar_rows)
-        fig_bar = px.bar(
-            bar_df, x='Metric', y='Days', color='Stat', barmode='group', text_auto='.2f',
-            custom_data=['Formula', 'Calc', 'Records'],
-            color_discrete_map={'Mean': '#60a5fa', 'Median': '#a78bfa'},
-            title="Average vs Median Lead Time by Step",
-        )
-        fig_bar.update_traces(
-            marker_line_width=0, textfont_color='#e2e8f0',
-            hovertemplate=(
-                "<b>%{x}</b> — %{fullData.name}<br>"
-                "Formula: %{customdata[0]}<br>"
-                "How it's calculated: %{customdata[1]}<br>"
-                "Value: %{y:.2f} days<br>"
-                "Valid records used: %{customdata[2]:,d} (negative-gap records excluded)"
-                "<extra></extra>"
-            )
-        )
-        wrap_chart(fig_bar, height=440, yaxis_extra={'title': 'Days'})
+        with col3:
+            st.markdown(f"""
+            <div class="glass-card card-amber" style="text-align:left; padding:22px;">
+                <div class="card-label">3. Submission → Confirmation</div>
+                <div style="font-weight:700; color:#e2e8f0; margin:8px 0 12px; font-size:1.05rem;">Total Admission Decision Time</div>
+                <div style="font-size:0.88rem; color:#cbd5e1; line-height:1.6;">
+                    <b>Formula:</b> Confirmation Date − Submission Date<br><br>
+                    • <b>Average (Mean):</b> {stats['sc_mean']:.2f} Days<br>
+                    • <b>Median:</b> {stats['sc_median']:.2f} Days<br>
+                    • <b>Tracked Records:</b> {stats['sc_count']:,}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
         st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
-        st.markdown("### 📅 4. Academic Year-by-Year Calculations")
+        st.markdown("### 📅 2. Academic Year-by-Year Text Calculations")
         st.markdown("This calculation covers **all 4 academic years** present in the dataset:")
 
         years_info = [
@@ -1285,41 +1139,19 @@ elif page == "⏱️ Admission Lead Time":
             ("2026", "2026-2027"),
         ]
 
-        year_trend_rows = []
         for y_code, y_name in years_info:
             y_df = df_lt[df_lt['Year'] == y_code] if 'Year' in df_lt.columns else pd.DataFrame()
             if not y_df.empty:
-                sv_pairs = y_df['Days_Sub_to_Ver'].notna()
-                vc_pairs = y_df['Days_Ver_to_Conf'].notna()
-                sc_pairs = y_df['Days_Sub_to_Conf'].notna()
+                sv_v = y_df[y_df['Days_Sub_to_Ver'] >= 0]['Days_Sub_to_Ver']
+                vc_v = y_df[y_df['Days_Ver_to_Conf'] >= 0]['Days_Ver_to_Conf']
+                sc_v = y_df[y_df['Days_Sub_to_Conf'] >= 0]['Days_Sub_to_Conf']
 
-                sv_v = y_df.loc[sv_pairs & (y_df['Days_Sub_to_Ver'] >= 0), 'Days_Sub_to_Ver']
-                vc_v = y_df.loc[vc_pairs & (y_df['Days_Ver_to_Conf'] >= 0), 'Days_Ver_to_Conf']
-                sc_v = y_df.loc[sc_pairs & (y_df['Days_Sub_to_Conf'] >= 0), 'Days_Sub_to_Conf']
-
-                sv_neg = int((sv_pairs & (y_df['Days_Sub_to_Ver'] < 0)).sum())
-                vc_neg = int((vc_pairs & (y_df['Days_Ver_to_Conf'] < 0)).sum())
-                sc_neg = int((sc_pairs & (y_df['Days_Sub_to_Conf'] < 0)).sum())
-                y_total_neg = sv_neg + vc_neg + sc_neg
-
-                sv_mean, sv_med = (sv_v.mean(), sv_v.median()) if len(sv_v) > 0 else (0.0, 0.0)
-                vc_mean, vc_med = (vc_v.mean(), vc_v.median()) if len(vc_v) > 0 else (0.0, 0.0)
-                sc_mean, sc_med = (sc_v.mean(), sc_v.median()) if len(sc_v) > 0 else (0.0, 0.0)
-
-                for key, mean_v in [('sv', sv_mean), ('vc', vc_mean), ('sc', sc_mean)]:
-                    year_trend_rows.append({'Year': y_name, 'Metric': LT_FORMULAS[key]['label'],
-                                             'Mean Days': mean_v, 'Formula': LT_FORMULAS[key]['formula']})
-
-                neg_note = (
-                    f'<div style="margin-top:8px; padding:6px 10px; background:rgba(248,113,113,0.10); '
-                    f'border:1px solid rgba(248,113,113,0.3); border-radius:8px; color:#fca5a5; font-size:0.8rem;">'
-                    f'⚠️ {y_total_neg:,} negative-date record(s) ignored this year '
-                    f'(Sub→Ver: {sv_neg}, Ver→Conf: {vc_neg}, Sub→Conf: {sc_neg}).</div>'
-                    if y_total_neg > 0 else
-                    '<div style="margin-top:8px; padding:6px 10px; background:rgba(52,211,153,0.08); '
-                    'border:1px solid rgba(52,211,153,0.25); border-radius:8px; color:#6ee7b7; font-size:0.8rem;">'
-                    '✅ No negative date gaps this year.</div>'
-                )
+                sv_mean = sv_v.mean() if len(sv_v) > 0 else 0.0
+                sv_med = sv_v.median() if len(sv_v) > 0 else 0.0
+                vc_mean = vc_v.mean() if len(vc_v) > 0 else 0.0
+                vc_med = vc_v.median() if len(vc_v) > 0 else 0.0
+                sc_mean = sc_v.mean() if len(sc_v) > 0 else 0.0
+                sc_med = sc_v.median() if len(sc_v) > 0 else 0.0
 
                 st.markdown(f"""
                 <div style="padding:16px 20px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:14px; margin-bottom:12px;">
@@ -1331,33 +1163,8 @@ elif page == "⏱️ Admission Lead Time":
                         <li><b>Verification → Confirmation (Student Decision Time):</b> Average = <b>{vc_mean:.2f} days</b> | Median = <b>{vc_med:.2f} days</b> (Records: {len(vc_v):,})</li>
                         <li><b>Submission → Confirmation (Total Admission Decision Time):</b> Average = <b>{sc_mean:.2f} days</b> | Median = <b>{sc_med:.2f} days</b> (Records: {len(sc_v):,})</li>
                     </ul>
-                    {neg_note}
                 </div>
                 """, unsafe_allow_html=True)
-
-        # ---- Year-wise trend chart — hover shows formula ----
-        if year_trend_rows:
-            st.markdown("### 📈 5. Year-over-Year Trend")
-            st.caption("Hover over a point to see the formula used for that step, negative-gap records excluded.")
-            trend_df = pd.DataFrame(year_trend_rows)
-            fig_trend = px.line(
-                trend_df, x='Year', y='Mean Days', color='Metric', markers=True,
-                custom_data=['Formula'],
-                color_discrete_map={
-                    LT_FORMULAS['sv']['label']: '#60a5fa',
-                    LT_FORMULAS['vc']['label']: '#34d399',
-                    LT_FORMULAS['sc']['label']: '#fbbf24',
-                },
-                title="Average Lead Time by Academic Year",
-            )
-            fig_trend.update_traces(
-                hovertemplate=(
-                    "<b>%{fullData.name}</b> — %{x}<br>"
-                    "Formula: %{customdata[0]}<br>"
-                    "Average: %{y:.2f} days<extra></extra>"
-                )
-            )
-            wrap_chart(fig_trend, height=440, yaxis_extra={'title': 'Average Days'})
 
 elif page == "🏆 Program Popularity":
     st.markdown('<span class="section-label">Programs</span>', unsafe_allow_html=True)
@@ -1619,45 +1426,6 @@ elif page == "🔮 Advanced Analytics":
                 fig1.update_traces(line_width=3, marker_size=8, marker_color='#a78bfa')
                 wrap_chart(fig1)
 
-        with c2:
-            st.markdown("**🎯 Program Recommendation (ML Model)**")
-            marks = st.slider("Your 12th Grade Percentage", 40, 100, 75)
-
-            train_data = get_program_training_data(df)
-            if not train_data.empty:
-                st.caption(f"Model trained on {len(train_data):,} confirmed admissions (2023–2026), matched by 12th % → actual program.")
-                results = predict_program(train_data, marks)
-                medals = ["🥇", "🥈", "🥉"]
-                if results:
-                    for rank, (program, score) in enumerate(results):
-                        st.markdown(f"**{medals[rank]} {program}** — {score * 100:.0f}% likelihood")
-                else:
-                    st.info("No close historical match at this percentage yet.")
-            else:
-                st.info("Not enough confirmed-admission records with 12th % on file to train a model yet.")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("**🤖 Ask Claude (LLM)**")
-            if get_anthropic_client() is None:
-                st.caption(
-                    "Not configured. Add `ANTHROPIC_API_KEY` under Settings → Secrets "
-                    "on Streamlit Cloud to enable this."
-                )
-            elif not train_data.empty:
-                st.caption("Claude reasons over the same nearby historical students as the model above, and explains why.")
-                if st.button("Get Claude's recommendation"):
-                    k = min(25, len(train_data))
-                    dist = (train_data[MARKS_COL] - marks).abs().to_numpy()
-                    nearest_idx = np.argsort(dist)[:k]
-                    neighbor_counts = tuple(
-                        train_data.iloc[nearest_idx]['Program1'].value_counts().items()
-                    )
-                    with st.spinner("Asking Claude..."):
-                        answer = llm_recommend_program(marks, neighbor_counts)
-                    if answer:
-                        st.markdown(answer)
-                    else:
-                        st.info("Couldn't reach the LLM — check your API key.")
 
         st.markdown('<hr class="divider"/>', unsafe_allow_html=True)
 
