@@ -300,20 +300,30 @@ def apply_layout(fig, height=500, xaxis_extra=None, yaxis_extra=None):
 def load_all_data():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     files = [
-        (os.path.join(BASE_DIR, "20260106153152255_Admission_2023_24.xls"), "2023"),
-        (os.path.join(BASE_DIR, "20260106153439552_Admission_2024_25.xls"), "2024"),
-        (os.path.join(BASE_DIR, "20260106153808096_Admission_2025_26.xls"), "2025"),
-        (os.path.join(BASE_DIR, "20260106153841088_Admission_2026_27.xls"), "2026"),
+        (os.path.join(BASE_DIR, "20260106153152255_Admission_2023_24.csv"), "2023"),
+        (os.path.join(BASE_DIR, "20260106153439552_Admission_2024_25.csv"), "2024"),
+        (os.path.join(BASE_DIR, "20260106153808096_Admission_2025_26.csv"), "2025"),
+        (os.path.join(BASE_DIR, "20260106153841088_Admission_2026_27.csv"), "2026"),
     ]
     dfs = []
+    missing = []
+    errors = []
     for path, year in files:
-        if os.path.exists(path):
-            try:
-                df_temp = pd.read_excel(path, header=3, engine='xlrd')
-                df_temp['Year'] = year
-                dfs.append(df_temp)
-            except Exception:
-                pass
+        if not os.path.exists(path):
+            missing.append(os.path.basename(path))
+            continue
+        try:
+            # Source files use cp1252 (Windows) encoding, not utf-8.
+            df_temp = pd.read_csv(path, header=3, encoding='cp1252', low_memory=False)
+            df_temp['Year'] = year
+            dfs.append(df_temp)
+        except Exception as e:
+            errors.append(f"{os.path.basename(path)}: {e}")
+
+    if missing:
+        st.warning(f"⚠️ Data file(s) not found next to the app: {', '.join(missing)}")
+    if errors:
+        st.error("⚠️ Failed to load some data files:\n" + "\n".join(errors))
     if not dfs:
         return pd.DataFrame()
     return pd.concat(dfs, ignore_index=True)
