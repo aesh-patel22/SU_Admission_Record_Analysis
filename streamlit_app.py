@@ -365,6 +365,36 @@ def compute_kpis(df: pd.DataFrame):
 
 
 @st.cache_data(show_spinner=False)
+def compute_submitted_to_verified(df: pd.DataFrame):
+    """
+    Submitted -> Verified conversion: of the applicants whose Status marks
+    them as Submitted, what share went on to actually get verified (i.e.
+    have a Verification Date on file)? Computed across all 4 combined
+    academic-year files. NOTE: this uses find_column() so it must be called
+    only after find_column() is defined below.
+    """
+    if df.empty:
+        return 0.0, 0, 0
+    if 'Status' in df.columns:
+        s = df['Status'].astype(str)
+        is_sub = s.str.contains('Submitted|Submit', na=False, case=False) & ~s.str.contains('Not Submitted|NotSubmitted', na=False, case=False)
+    else:
+        is_sub = pd.Series(False, index=df.index)
+
+    v_col = find_column(df, 'verification date') or 'Verification Date'
+    if v_col in df.columns:
+        v_dt = pd.to_datetime(df[v_col], errors='coerce', format='mixed')
+        is_verified = v_dt.notna()
+    else:
+        is_verified = pd.Series(False, index=df.index)
+
+    submitted_count = int(is_sub.sum())
+    verified_count = int((is_sub & is_verified).sum())
+    rate = round(verified_count / submitted_count * 100, 1) if submitted_count else 0.0
+    return rate, verified_count, submitted_count
+
+
+@st.cache_data(show_spinner=False)
 def get_confirmed_count(df: pd.DataFrame) -> int:
     if df.empty:
         return 0
@@ -1076,14 +1106,27 @@ elif page == "📈 Inquiry Funnel":
         # Mini KPI row
         rate_sub = round(submitted / total * 100, 1) if total else 0
         rate_con = round(confirmed / total * 100, 1) if total else 0
-        c1, c2, c3 = st.columns(3)
+        verify_rate, verified_count, submitted_count = compute_submitted_to_verified(df)
+
+        c1, c2, c3, c4 = st.columns(4)
         for col, label, val, cls in [
             (c1, "Inquiry → Submit", f"{rate_sub}%", "card-green"),
             (c2, "Inquiry → Confirm", f"{rate_con}%", "card-amber"),
             (c3, "Drop-off Rate", f"{round(100-rate_sub,1)}%", "card-violet"),
+            (c4, "Submitted → Verified", f"{verify_rate}%", "card-blue"),
         ]:
             with col:
                 st.markdown(f'<div class="glass-card {cls}"><div class="card-label">{label}</div><div class="card-value">{val}</div></div>', unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div style="margin-top:14px; padding:12px 16px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px;">
+            <span style="color:#94a3b8; font-size:0.85rem;">
+                <b style="color:#60a5fa;">Submitted → Verified calculation:</b>
+                Formula = Verified ÷ Submitted × 100, where <i>Verified</i> = Submitted records that also have a Verification Date on file (across all 4 files combined).<br>
+                = {verified_count:,} ÷ {submitted_count:,} × 100 = <b style="color:#e2e8f0;">{verify_rate}%</b>
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
 elif page == "⏱️ Admission Lead Time":
     st.markdown('<span class="section-label">Process Efficiency</span>', unsafe_allow_html=True)
