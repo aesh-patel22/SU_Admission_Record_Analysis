@@ -1098,12 +1098,15 @@ elif page == "📈 Inquiry Funnel":
         wrap_chart(fig, height=550)
 
         # Mini KPI row
-        verified = get_verified_count(df)
+        # Keep all original KPI calculations unchanged.
         rate_sub = round(submitted / total * 100, 1) if total else 0
         rate_con = round(confirmed / total * 100, 1) if total else 0
-        # ONLY change: genuine combined 4-year Submitted → Verified rate
-        # Verified submitted applicants = 13,015; submitted applicants = 16,793
-        rate_ver = round(13015 / 16793 * 100, 1)
+
+        # Submitted → Verified: genuine combined rate across all 4 academic years.
+        # Verified submitted applicants = 13,015; submitted applicants = 16,793.
+        verified_submitted = 13015
+        submitted_combined = 16793
+        rate_ver = round(verified_submitted / submitted_combined * 100, 1)
         c1, c2, c3, c4 = st.columns(4)
         for col, label, val, cls in [
             (c1, "Inquiry → Submit", f"{rate_sub}%", "card-green"),
@@ -1116,8 +1119,8 @@ elif page == "📈 Inquiry Funnel":
 
         st.caption(
             f"ℹ️ Submitted → Verified = Verified submitted applicants ÷ Submitted applicants, "
-            f"combined across all 4 academic years (2023‑24 to 2026‑27) = "
-            f"13,015 ÷ 16,793 × 100 = {rate_ver}%."
+            f"summed across all 4 academic years (2023‑24 to 2026‑27) = "
+            f"{verified_submitted:,} ÷ {submitted_combined:,} × 100 = {rate_ver}%."
         )
 
 elif page == "⏱️ Admission Lead Time":
